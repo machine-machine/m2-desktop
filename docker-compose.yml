@@ -1,0 +1,47 @@
+services:
+  clawdbot-desktop-worker:
+    build: .
+    container_name: clawdbot-desktop-worker
+    restart: unless-stopped
+    environment:
+      # Clawdbot
+      CLAWDBOT_HOME: /clawdbot_home
+      WORKSPACE: /workspace
+
+      # VNC/noVNC
+      VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
+
+      # GPU (for non-swarm you can also use NVIDIA_* envs/runtime)
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+
+      # Provider keys etc – set in Coolify
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+    # GPU access (host must have NVIDIA Container Toolkit)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu", "compute", "utility", "video"]
+
+    # No direct host port mapping; Coolify/reverse proxy will handle it
+    expose:
+      - "18789" # Clawdbot UI/API
+      - "6080"  # noVNC web VNC
+
+    volumes:
+      - clawdbot_home:/clawdbot_home
+      - clawdbot_workspace:/workspace
+      # Optional: Docker socket for sandboxes
+      # - /var/run/docker.sock:/var/run/docker.sock
+
+    # If your Docker requires explicit runtime:
+    # runtime: nvidia
+
+volumes:
+  clawdbot_home:
+  clawdbot_workspace:

@@ -1,0 +1,22 @@
+# Local development/testing without GPU
+# Usage: docker compose -f docker-compose.local.yml up
+
+services:
+  clawdbot-desktop-worker:
+    build: .
+    container_name: clawdbot-desktop-worker
+    restart: unless-stopped
+    environment:
+      CLAWDBOT_HOME: /clawdbot_home
+      WORKSPACE: /workspace
+      VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
+    ports:
+      - "6080:6080"   # noVNC
+      - "18789:18789" # Clawdbot UI
+    volumes:
+      - clawdbot_home:/clawdbot_home
+      - clawdbot_workspace:/workspace
+
+volumes:
+  clawdbot_home:
+  clawdbot_workspace:

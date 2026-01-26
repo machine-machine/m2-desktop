@@ -1,0 +1,13 @@
+{
+  "sandbox": {
+    "workdir": "/workspace",
+    "readOnlyRoot": true,
+    "tmpfs": ["/tmp"],
+    "network": "none",
+    "user": "developer",
+    "capDrop": ["ALL"]
+  },
+  "workspace": {
+    "path": "/workspace"
+  }
+}
