@@ -1,4 +1,4 @@
-# GNOME + noVNC + Clawdbot desktop worker
+# VNC + noVNC + Clawdbot desktop worker (minimal X session)
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -10,15 +10,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CLAWDBOT_HOME=/clawdbot_home \
     WORKSPACE=/workspace
 
-# Base packages, locales, GNOME, VNC, noVNC, Browser
+# Base packages, locales, VNC, noVNC, Browser
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       locales \
       sudo \
       dbus-x11 \
-      gnome-shell gnome-session gnome-terminal gnome-control-center nautilus \
-      gdm3 \
-      tigervnc-standalone-server tigervnc-tools tigervnc-xorg-extension \
+      xterm \
+      tigervnc-standalone-server tigervnc-tools \
       novnc websockify \
       x11-xserver-utils \
       curl ca-certificates \
@@ -61,6 +60,11 @@ COPY scripts/xstartup /home/developer/.vnc/xstartup
 RUN chmod +x /usr/local/bin/entrypoint.sh && \
     chmod +x /home/developer/.vnc/xstartup && \
     chown -R developer:developer /home/developer/.vnc
+
+# Create Xtigervnc-session for minimal X session (avoids GNOME/systemd dependency)
+RUN mkdir -p /etc/X11 && \
+    printf '#!/bin/bash\nexport DISPLAY=:1\n/usr/bin/x-terminal-emulator -e /bin/bash &\ntail -f /dev/null\n' > /etc/X11/Xtigervnc-session && \
+    chmod +x /etc/X11/Xtigervnc-session
 
 # Expose internal ports (no direct host bind – Coolify/reverse proxy will route)
 EXPOSE 18789 6080
