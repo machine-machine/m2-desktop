@@ -35,24 +35,6 @@ services:
     labels:
       - traefik.enable=true
 
-      # noVNC router with VERY HIGH priority to override Coolify's default
-      - 'traefik.http.routers.novnc.rule=Host(`${COOLIFY_FQDN}`)'
-      - traefik.http.routers.novnc.entrypoints=https
-      - traefik.http.routers.novnc.tls=true
-      - traefik.http.routers.novnc.tls.certresolver=letsencrypt
-      - traefik.http.routers.novnc.service=novnc
-      - traefik.http.routers.novnc.priority=1000
-      - traefik.http.services.novnc.loadbalancer.server.port=6080
-
-      # Gateway router with medium priority
-      - 'traefik.http.routers.gateway.rule=Host(`${COOLIFY_FQDN}`) && PathPrefix(`/api`)'
-      - traefik.http.routers.gateway.entrypoints=https
-      - traefik.http.routers.gateway.tls=true
-      - traefik.http.routers.gateway.tls.certresolver=letsencrypt
-      - traefik.http.routers.gateway.service=gateway
-      - traefik.http.routers.gateway.priority=500
-      - traefik.http.services.gateway.loadbalancer.server.port=18789
-
 volumes:
   clawdbot_home:
   clawdbot_workspace:
