@@ -154,6 +154,18 @@ Or use the interactive onboarding wizard:
 docker compose exec clawdbot-desktop-worker clawdbot onboard
 ```
 
+### Using Claude Max (No API Key Required)
+
+If you have a Claude Max subscription, you can use browser-based auth instead of API keys:
+
+1. Connect to the VNC desktop (`https://vnc.yourdomain.com/vnc.html`)
+2. Open a terminal in the GNOME desktop
+3. Run `clawdbot browser` to launch the managed Chromium browser
+4. Log into `claude.ai` with your Claude Max account
+5. Clawdbot will use your browser session for Claude interactions
+
+This avoids API costs entirely - you use your unlimited Claude Max subscription.
+
 ## Known Limitations
 
 - **GNOME on non-GPU hosts**: The GNOME desktop may not start properly on hosts without proper GPU/display support. On such hosts, the VNC server will still be accessible but may show a blank screen. This works correctly on Linux hosts with NVIDIA GPUs.

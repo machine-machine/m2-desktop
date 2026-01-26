@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CLAWDBOT_HOME=/clawdbot_home \
     WORKSPACE=/workspace
 
-# Base packages, locales, GNOME, VNC, noVNC, Node
+# Base packages, locales, GNOME, VNC, noVNC, Browser
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       locales \
@@ -25,6 +25,12 @@ RUN apt-get update && \
       git \
       bash \
       supervisor \
+      # Browser for Claude Max / Clawdbot browser auth
+      chromium-browser \
+      fonts-liberation \
+      libnss3 \
+      libxss1 \
+      libasound2 \
     && locale-gen en_US.UTF-8 && \
     rm -rf /var/lib/apt/lists/*
 
