@@ -35,20 +35,23 @@ services:
     labels:
       - "traefik.enable=true"
 
-      # noVNC Router (subdomain: vnc.yourdomain.com)
-      - "traefik.http.routers.novnc.rule=Host(`${VNC_DOMAIN:-vnc.localhost}`)"
+      # noVNC Router (path-based: /vnc/)
+      - "traefik.http.routers.novnc.rule=Host(`${DOMAIN:-clawd.machinemachine.ai}`) && PathPrefix(`/vnc`)"
       - "traefik.http.routers.novnc.entrypoints=https"
       - "traefik.http.routers.novnc.tls=true"
       - "traefik.http.routers.novnc.tls.certresolver=letsencrypt"
       - "traefik.http.routers.novnc.service=novnc"
       - "traefik.http.services.novnc.loadbalancer.server.port=6080"
+      - "traefik.http.middlewares.novnc-stripprefix.stripprefix.prefixes=/vnc"
+      - "traefik.http.routers.novnc.middlewares=novnc-stripprefix"
 
-      # Clawdbot Gateway Router (subdomain: gateway.yourdomain.com)
-      - "traefik.http.routers.gateway.rule=Host(`${GATEWAY_DOMAIN:-gateway.localhost}`)"
+      # Clawdbot Gateway Router (root path)
+      - "traefik.http.routers.gateway.rule=Host(`${DOMAIN:-clawd.machinemachine.ai}`)"
       - "traefik.http.routers.gateway.entrypoints=https"
       - "traefik.http.routers.gateway.tls=true"
       - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
       - "traefik.http.routers.gateway.service=gateway"
+      - "traefik.http.routers.gateway.priority=1"
       - "traefik.http.services.gateway.loadbalancer.server.port=18789"
 
 volumes:

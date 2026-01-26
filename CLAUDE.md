@@ -15,10 +15,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 │  Docker Container (clawdbot-desktop-worker) │
 │                                             │
 │  Supervisord (Process Manager)              │
-│  ├── GNOME Session (:1 display)             │
-│  ├── TigerVNC Server (localhost:5901)       │
+│  ├── VNC Server (:1 + gnome-terminal)       │
 │  ├── noVNC/websockify (0.0.0.0:6080)        │
-│  └── Clawdbot Daemon (0.0.0.0:18789)        │
+│  └── Clawdbot Gateway (0.0.0.0:18789)       │
 │                                             │
 │  Volumes:                                   │
 │  ├── /clawdbot_home (config & state)        │
@@ -62,16 +61,24 @@ docker compose exec clawdbot-desktop-worker nvidia-smi
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `DOMAIN` | `clawd.machinemachine.ai` | Domain for path-based routing |
 | `VNC_PASSWORD` | `clawdbot` | VNC connection password |
 | `CLAWDBOT_HOME` | `/clawdbot_home` | Clawdbot data directory |
 | `WORKSPACE` | `/workspace` | Workspace directory |
 | `ANTHROPIC_API_KEY` | - | Set in Coolify for Clawdbot |
 | `OPENAI_API_KEY` | - | Set in Coolify for Clawdbot |
 
+## URL Routing (Path-Based)
+
+Single domain with path-based routing via Traefik:
+
+- `https://clawd.yourdomain.com/` → Clawdbot Gateway (port 18789)
+- `https://clawd.yourdomain.com/vnc/` → noVNC web interface (port 6080)
+
 ## Exposed Ports (Internal)
 
-- `6080` - noVNC web interface (routed via Coolify reverse proxy)
-- `18789` - Clawdbot UI/API gateway (routed via Coolify reverse proxy)
+- `6080` - noVNC web interface (routed to `/vnc/` path)
+- `18789` - Clawdbot UI/API gateway (routed to root path `/`)
 
 ## Coolify Deployment
 
@@ -83,9 +90,10 @@ docker compose exec clawdbot-desktop-worker nvidia-smi
 ## Supervisord Process Priority
 
 Processes start in this order (lower number = higher priority):
-1. `xvnc` (priority 10) - Xtigervnc on :1 (port 5901)
-2. `gnome-session` (priority 20) - GNOME desktop (sleeps 2s for Xvnc)
-3. `novnc` (priority 30) - websockify on 6080 (sleeps 3s)
-4. `clawdbot-gateway` (priority 40) - Clawdbot Gateway on 18789 (sleeps 5s)
+1. `vncserver` (priority 10) - VNC server on :1, launches xstartup (gnome-terminal)
+2. `novnc` (priority 30) - websockify on 6080 (sleeps 3s)
+3. `clawdbot-gateway` (priority 40) - Clawdbot Gateway on 18789 (sleeps 5s)
 
 All processes are configured with `autorestart=true`.
+
+Note: Full GNOME shell is not used (causes SIGTRAP in headless Docker). Instead, VNC xstartup launches gnome-terminal for a lightweight desktop.
