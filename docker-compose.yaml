@@ -26,6 +26,12 @@ services:
       - clawdbot_workspace:/workspace
       # Optional: Docker socket for sandboxes
       # - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6080/vnc.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     labels:
       - "traefik.enable=true"
 
