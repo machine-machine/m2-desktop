@@ -86,12 +86,11 @@ RUN groupadd -g ${GID} ${USER} && \
     chmod 0440 /etc/sudoers.d/${USER}
 
 # =============================================================================
-# Install Selkies-GStreamer
+# Install Selkies-GStreamer from GitHub wheel
 # =============================================================================
-RUN pip3 install --no-cache-dir \
-    selkies-gstreamer==${SELKIES_VERSION} \
-    websockets \
-    basicauth
+RUN pip3 install --no-cache-dir --break-system-packages \
+    "https://github.com/selkies-project/selkies-gstreamer/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
+    websockets
 
 # =============================================================================
 # Install Node.js 22 + Clawdbot
