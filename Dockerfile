@@ -3,14 +3,12 @@
 # GPU-accelerated remote desktop with macOS-style appearance
 # =============================================================================
 
-FROM ubuntu:22.04
-
-# Build args
-ARG DEBIAN_FRONTEND=noninteractive
-ARG SELKIES_VERSION=1.6.0
+# Selkies base image (includes GStreamer, NVENC, WebRTC, PulseAudio, Xvfb)
+FROM ghcr.io/selkies-project/selkies-gstreamer:24.04-20240701
 
 # Environment
-ENV LANG=en_US.UTF-8 \
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8 \
     TZ=UTC \
     USER=developer \
@@ -30,67 +28,37 @@ ENV LANG=en_US.UTF-8 \
     WORKSPACE=/workspace
 
 # =============================================================================
-# Base System + NVIDIA Support
+# Install Desktop Environment + Dependencies
 # =============================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Locale
     locales \
     # Core utilities
     sudo ca-certificates curl wget git nano htop \
-    # X11 and display
-    xvfb x11-utils x11-xserver-utils xdotool xclip \
-    # PulseAudio for audio support
-    pulseaudio pavucontrol \
     # XFCE4 Desktop (lightweight)
     xfce4 xfce4-terminal xfce4-taskmanager thunar mousepad \
     # Plank dock (macOS-style)
     plank \
-    # Theme dependencies + fallback themes
+    # Theme dependencies
     sassc libglib2.0-dev-bin libxml2-utils gtk2-engines-murrine \
+    # Fallback themes (in case WhiteSur fails)
     arc-theme papirus-icon-theme dmz-cursor-theme \
     # Fonts
     fonts-inter fonts-noto fonts-noto-color-emoji fonts-dejavu-core \
     # Browser
     chromium-browser fonts-liberation libnss3 libxss1 libasound2 \
-    # Python for Selkies
-    python3 python3-pip python3-dev python3-gi python3-gi-cairo \
-    gir1.2-gtk-3.0 gir1.2-gst-plugins-base-1.0 gir1.2-gstreamer-1.0 \
-    # GStreamer
-    gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-pulseaudio \
-    gstreamer1.0-x gstreamer1.0-gl \
-    # NVIDIA GStreamer plugins (for NVENC)
-    gstreamer1.0-vaapi \
     # Process management
     supervisor dbus-x11 \
-    # Networking
-    net-tools iproute2 \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
-# NVIDIA NVENC Support
-# =============================================================================
-# Install NVIDIA GStreamer plugins for hardware encoding
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libnvidia-encode-550 \
-    && rm -rf /var/lib/apt/lists/* \
-    || echo "NVIDIA encode libs will come from host driver"
-
-# =============================================================================
 # Create User
 # =============================================================================
-RUN groupadd -g ${GID} ${USER} && \
-    useradd -m -s /bin/bash -u ${UID} -g ${GID} ${USER} && \
+RUN groupadd -g ${GID} ${USER} 2>/dev/null || true && \
+    useradd -m -s /bin/bash -u ${UID} -g ${GID} ${USER} 2>/dev/null || true && \
     echo "${USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER} && \
     chmod 0440 /etc/sudoers.d/${USER}
-
-# =============================================================================
-# Install Selkies-GStreamer from GitHub wheel
-# =============================================================================
-RUN pip3 install --no-cache-dir --break-system-packages \
-    "https://github.com/selkies-project/selkies-gstreamer/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
-    websockets
 
 # =============================================================================
 # Install Node.js 22 + Clawdbot
@@ -106,23 +74,26 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
 USER ${USER}
 WORKDIR /tmp
 
-# WhiteSur GTK Theme (with error handling)
+# WhiteSur GTK Theme
 RUN git clone https://github.com/vinceliuice/WhiteSur-gtk-theme.git --depth=1 && \
     cd WhiteSur-gtk-theme && \
-    (bash ./install.sh -c Dark -l --tweaks normal || bash ./install.sh -c Dark || echo "WhiteSur GTK install failed") && \
-    cd .. && rm -rf WhiteSur-gtk-theme || true
+    ./install.sh -c Dark -l -N glassy && \
+    cd .. && rm -rf WhiteSur-gtk-theme || \
+    echo "WhiteSur GTK theme install failed, using fallback"
 
-# WhiteSur Icon Theme (with error handling)
+# WhiteSur Icon Theme
 RUN git clone https://github.com/vinceliuice/WhiteSur-icon-theme.git --depth=1 && \
     cd WhiteSur-icon-theme && \
-    (bash ./install.sh || echo "WhiteSur icons install failed") && \
-    cd .. && rm -rf WhiteSur-icon-theme || true
+    ./install.sh -t default && \
+    cd .. && rm -rf WhiteSur-icon-theme || \
+    echo "WhiteSur icon theme install failed, using fallback"
 
-# McMojave Cursors (with error handling)
+# McMojave Cursors
 RUN git clone https://github.com/vinceliuice/McMojave-cursors.git --depth=1 && \
     cd McMojave-cursors && \
-    (bash ./install.sh || echo "McMojave cursors install failed") && \
-    cd .. && rm -rf McMojave-cursors || true
+    ./install.sh && \
+    cd .. && rm -rf McMojave-cursors || \
+    echo "McMojave cursors install failed, using fallback"
 
 # Download wallpaper
 RUN mkdir -p ~/.local/share/backgrounds && \
@@ -131,9 +102,8 @@ RUN mkdir -p ~/.local/share/backgrounds && \
     echo "Wallpaper download failed, will use default"
 
 # =============================================================================
-# Configure XFCE4
+# Configure XFCE4 directories
 # =============================================================================
-USER ${USER}
 RUN mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml \
              ~/.config/xfce4/panel \
              ~/.config/plank/dock1/launchers \
