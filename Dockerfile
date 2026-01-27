@@ -66,6 +66,9 @@ RUN mkdir -p /etc/X11 && \
     printf '#!/bin/bash\nexport DISPLAY=:1\n/usr/bin/x-terminal-emulator -e /bin/bash &\ntail -f /dev/null\n' > /etc/X11/Xtigervnc-session && \
     chmod +x /etc/X11/Xtigervnc-session
 
+# Create index.html to redirect root to vnc.html (avoids directory listing)
+RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=/vnc.html"><script>window.location.href="/vnc.html";</script></head></html>' > /usr/share/novnc/index.html
+
 # Expose internal ports (no direct host bind – Coolify/reverse proxy will route)
 EXPOSE 18789 6080
 
