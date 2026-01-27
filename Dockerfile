@@ -1,4 +1,4 @@
-# VNC + noVNC + Clawdbot desktop worker (Pretty XFCE4 with dark theme)
+# VNC + noVNC + Clawdbot desktop worker (Pretty XFCE4 with macOS styling)
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CLAWDBOT_HOME=/clawdbot_home \
     WORKSPACE=/workspace
 
-# Base packages + XFCE4 desktop environment + themes
+# Base packages + XFCE4 desktop environment + theme build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       locales \
@@ -29,10 +29,10 @@ RUN apt-get update && \
       mousepad \
       # macOS-style dock
       plank \
-      # Themes (apt-installable, reliable)
-      arc-theme \
-      papirus-icon-theme \
-      dmz-cursor-theme \
+      # Theme build dependencies (required for WhiteSur)
+      sassc \
+      libglib2.0-dev-bin \
+      libxml2-utils \
       # Core utilities
       curl ca-certificates wget \
       git \
@@ -55,14 +55,32 @@ RUN apt-get update && \
 RUN useradd -m -s /bin/bash ${USER} && \
     echo "${USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER}
 
+# Switch to developer user for theme installation (themes install to ~/.themes)
 USER ${USER}
 WORKDIR /home/${USER}
 
-# Download a nice dark wallpaper
+# Install WhiteSur GTK theme (macOS-style)
+RUN git clone https://github.com/vinceliuice/WhiteSur-gtk-theme.git --depth=1 && \
+    cd WhiteSur-gtk-theme && \
+    ./install.sh -c Dark -l && \
+    cd .. && rm -rf WhiteSur-gtk-theme
+
+# Install WhiteSur icon theme
+RUN git clone https://github.com/vinceliuice/WhiteSur-icon-theme.git --depth=1 && \
+    cd WhiteSur-icon-theme && \
+    ./install.sh && \
+    cd .. && rm -rf WhiteSur-icon-theme
+
+# Install McMojave cursors (macOS-style)
+RUN git clone https://github.com/vinceliuice/McMojave-cursors.git --depth=1 && \
+    cd McMojave-cursors && \
+    ./install.sh && \
+    cd .. && rm -rf McMojave-cursors
+
+# Download WhiteSur wallpaper
 RUN mkdir -p ~/.local/share/backgrounds && \
-    curl -sL "https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1920&q=80" \
-    -o ~/.local/share/backgrounds/wallpaper.jpg || \
-    curl -sL "https://picsum.photos/1920/1080" -o ~/.local/share/backgrounds/wallpaper.jpg || true
+    curl -sL "https://raw.githubusercontent.com/vinceliuice/WhiteSur-wallpapers/main/4k/WhiteSur-dark.png" \
+    -o ~/.local/share/backgrounds/wallpaper.png || true
 
 # Install Node 22 (via NodeSource) and Clawdbot
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && \
