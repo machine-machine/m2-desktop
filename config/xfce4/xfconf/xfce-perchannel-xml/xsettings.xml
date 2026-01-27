@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xsettings" version="1.0">
   <property name="Net" type="empty">
-    <property name="ThemeName" type="string" value="WhiteSur-Dark"/>
-    <property name="IconThemeName" type="string" value="WhiteSur-dark"/>
-    <property name="CursorThemeName" type="string" value="McMojave-cursors"/>
+    <property name="ThemeName" type="string" value="Arc-Dark"/>
+    <property name="IconThemeName" type="string" value="Papirus-Dark"/>
+    <property name="CursorThemeName" type="string" value="DMZ-White"/>
     <property name="CursorThemeSize" type="int" value="24"/>
   </property>
   <property name="Gtk" type="empty">
     <property name="FontName" type="string" value="Sans 10"/>
     <property name="MonospaceFontName" type="string" value="Monospace 10"/>
-    <property name="CursorThemeName" type="string" value="McMojave-cursors"/>
+    <property name="CursorThemeName" type="string" value="DMZ-White"/>
     <property name="CursorThemeSize" type="int" value="24"/>
   </property>
 </channel>
