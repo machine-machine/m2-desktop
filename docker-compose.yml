@@ -3,14 +3,28 @@ services:
     build: .
     container_name: clawdbot-desktop-worker
     restart: unless-stopped
+
     environment:
+      # Clawdbot
       CLAWDBOT_HOME: /clawdbot_home
       WORKSPACE: /workspace
-      VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      # Auth (same VNC_PASSWORD as before!)
+      VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
+
+      # Selkies-GStreamer
+      SELKIES_ENCODER: nvh264enc
+      SELKIES_FRAMERATE: 60
+      SELKIES_VIDEO_BITRATE: 8000
+      SELKIES_ENABLE_RESIZE: "true"
+      SELKIES_ENABLE_BASIC_AUTH: "true"
+
+      # GPU (need 'all' for NVENC encoding)
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+
     deploy:
       resources:
         reservations:
@@ -18,20 +32,27 @@ services:
             - driver: nvidia
               count: all
               capabilities: ["gpu", "compute", "utility", "video"]
+
+    # Required for Selkies/Chrome shared memory
+    shm_size: '2gb'
+
     expose:
-      - "6080"
-      - "18789"
+      - "8080"   # Selkies WebRTC (was 6080 for noVNC)
+      - "18789"  # Clawdbot Gateway (unchanged)
+
     volumes:
       - clawdbot_home:/clawdbot_home
       - clawdbot_workspace:/workspace
       # Optional: Docker socket for sandboxes
       # - /var/run/docker.sock:/var/run/docker.sock
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6080/vnc.html"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+
     labels:
       - traefik.enable=true
 

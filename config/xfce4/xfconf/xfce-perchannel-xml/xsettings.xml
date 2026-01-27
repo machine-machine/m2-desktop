@@ -4,11 +4,17 @@
     <property name="ThemeName" type="string" value="WhiteSur-Dark"/>
     <property name="IconThemeName" type="string" value="WhiteSur-dark"/>
     <property name="CursorThemeName" type="string" value="McMojave-cursors"/>
-    <property name="CursorThemeSize" type="int" value="24"/>
+    <property name="EnableEventSounds" type="bool" value="false"/>
+  </property>
+  <property name="Xft" type="empty">
+    <property name="Antialias" type="int" value="1"/>
+    <property name="HintStyle" type="string" value="hintslight"/>
+    <property name="RGBA" type="string" value="rgb"/>
+    <property name="DPI" type="int" value="96"/>
   </property>
   <property name="Gtk" type="empty">
-    <property name="FontName" type="string" value="Sans 10"/>
-    <property name="MonospaceFontName" type="string" value="Monospace 10"/>
+    <property name="FontName" type="string" value="Inter 10"/>
+    <property name="MonospaceFontName" type="string" value="JetBrains Mono 10"/>
     <property name="CursorThemeName" type="string" value="McMojave-cursors"/>
     <property name="CursorThemeSize" type="int" value="24"/>
   </property>

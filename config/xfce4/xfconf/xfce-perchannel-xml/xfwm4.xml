@@ -3,8 +3,10 @@
   <property name="general" type="empty">
     <property name="use_compositing" type="bool" value="false"/>
     <property name="theme" type="string" value="WhiteSur-Dark"/>
-    <property name="title_font" type="string" value="Sans Bold 10"/>
-    <property name="workspace_count" type="int" value="4"/>
+    <property name="title_font" type="string" value="Inter Bold 10"/>
     <property name="button_layout" type="string" value="CHM|"/>
+    <property name="workspace_count" type="int" value="4"/>
+    <property name="placement_ratio" type="int" value="20"/>
+    <property name="show_dock_shadow" type="bool" value="false"/>
   </property>
 </channel>

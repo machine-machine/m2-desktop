@@ -1,37 +1,20 @@
 [PlankDockPreferences]
-#Whether to show only windows of the current workspace.
-CurrentWorkspaceOnly=false
-#The size of dock icons (in pixels).
-IconSize=48
-#If 0, the dock won't hide.  If 1, the dock intelligently hides.  If 2, the dock auto-hides. If 3, the dock dodges active maximized windows. If 4, the dock dodges every window.
-HideMode=1
-#Time (in ms) to wait before unhiding the dock.
-UnhideDelay=0
-#Time (in ms) to wait before hiding the dock.
-HideDelay=300
-#The monitor number for the dock. Use -1 to keep on the primary monitor.
-Monitor=-1
-#List of *.dockitem files on this dock. DO NOT MODIFY
-DockItems=thunar.dockitem;xfce4-terminal.dockitem;chromium-browser.dockitem
-#The position for the dock on the monitor. If 0, left. If 1, right. If 2, top. If 3, bottom.
-Position=3
-#The dock's position offset from center (in percent).
-Offset=0
-#The name of the dock's theme.
-Theme=Transparent
-#The alignment for the dock on the monitor's edge. If 0, panel-mode. If 1, left-aligned. If 2, right-aligned. If 3, centered.
 Alignment=3
-#Whether to prevent drag'n'drop actions and lock items on the dock.
+AutohideMode=3
+CurrentWorkspaceOnly=false
+DockItems=terminal.dockitem;chromium.dockitem;thunar.dockitem
+HideDelay=500
+HideMode=3
+IconSize=48
+ItemsAlignment=3
 LockItems=false
-#Whether to use pressure-based revealing of the dock if the support is available.
-PressureReveal=false
-#Whether to show only pinned applications. Useful for running more than one dock.
+Monitor=-1
+Offset=0
 PinnedOnly=false
-#Whether to automatically pin an application if it seems useful to do so.
-AutoPinning=true
-#Whether to show the item for the dock itself.
+Position=3
+PressureReveal=false
 ShowDockItem=false
-#Whether the dock will zoom when hovered.
+Theme=Gtk+
+UnhideDelay=0
 ZoomEnabled=true
-#The dock's zoom percentage (in percent).
 ZoomPercent=150

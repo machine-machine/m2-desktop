@@ -1,22 +1,42 @@
-# Local development/testing without GPU
-# Usage: docker compose -f docker-compose.local.yml up
+# Local development without GPU
+# Usage: docker compose -f docker-compose.local.yml up -d
 
 services:
   clawdbot-desktop-worker:
     build: .
-    container_name: clawdbot-desktop-worker
+    container_name: clawdbot-desktop-worker-local
     restart: unless-stopped
+
     environment:
+      DISPLAY: ":0"
+      XDG_RUNTIME_DIR: "/tmp/runtime-developer"
+
+      # Use software encoding (no GPU)
+      SELKIES_ENCODER: x264enc
+      SELKIES_FRAMERATE: 30
+      SELKIES_VIDEO_BITRATE: 4000
+      SELKIES_ENABLE_RESIZE: "true"
+      SELKIES_ENABLE_BASIC_AUTH: "true"
+      SELKIES_BASIC_AUTH_PASSWORD: ${VNC_PASSWORD:-clawdbot}
+      SELKIES_ENABLE_HTTPS: "false"
+
+      # No GPU
+      NVIDIA_VISIBLE_DEVICES: ""
+
       CLAWDBOT_HOME: /clawdbot_home
       WORKSPACE: /workspace
-      VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+    shm_size: '1gb'
+
     ports:
-      - "6080:6080"   # noVNC
-      - "18789:18789" # Clawdbot UI
+      - "8080:8080"   # Selkies WebRTC
+      - "18789:18789" # Clawdbot Gateway
+
     volumes:
-      - clawdbot_home:/clawdbot_home
-      - clawdbot_workspace:/workspace
+      - clawdbot_home_local:/clawdbot_home
+      - clawdbot_workspace_local:/workspace
 
 volumes:
-  clawdbot_home:
-  clawdbot_workspace:
+  clawdbot_home_local:
+  clawdbot_workspace_local:

@@ -1,22 +1,49 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
-# Default VNC password if not set
-VNC_PASSWORD="${VNC_PASSWORD:-clawdbot}"
+echo "=============================================="
+echo " Clawdbot Desktop Worker - Selkies-GStreamer"
+echo "=============================================="
 
-# Ensure runtime dirs
-mkdir -p /run/user/1000
-chown -R ${USER}:${USER} /run/user/1000
+# Create runtime directories
+mkdir -p /tmp/runtime-developer
+chmod 700 /tmp/runtime-developer
+chown developer:developer /tmp/runtime-developer
 
-# Set up VNC password
-sudo -u ${USER} mkdir -p /home/${USER}/.vnc
-echo "${VNC_PASSWORD}" | sudo -u ${USER} vncpasswd -f > /home/${USER}/.vnc/passwd
-chmod 600 /home/${USER}/.vnc/passwd
-chown ${USER}:${USER} /home/${USER}/.vnc/passwd
+# Ensure volumes are owned by developer
+chown -R developer:developer ${CLAWDBOT_HOME} ${WORKSPACE} 2>/dev/null || true
 
-# Start supervisord to run:
-# - GNOME session on :1
-# - TigerVNC on :1
-# - noVNC/websockify on 6080
-# - Clawdbot gateway
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+# =============================================================================
+# Map VNC_PASSWORD to Selkies auth (backwards compatibility)
+# =============================================================================
+export SELKIES_BASIC_AUTH_USER="${SELKIES_BASIC_AUTH_USER:-developer}"
+export SELKIES_BASIC_AUTH_PASSWORD="${VNC_PASSWORD:-clawdbot}"
+
+echo "Authentication:"
+echo "  Username: ${SELKIES_BASIC_AUTH_USER}"
+echo "  Password: [set from VNC_PASSWORD]"
+echo ""
+
+# =============================================================================
+# Detect GPU and configure encoder
+# =============================================================================
+if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+    echo "✓ NVIDIA GPU detected:"
+    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+    export SELKIES_ENCODER="${SELKIES_ENCODER:-nvh264enc}"
+else
+    echo "⚠ No NVIDIA GPU detected, using software encoding"
+    export SELKIES_ENCODER="x264enc"
+    export SELKIES_FRAMERATE="${SELKIES_FRAMERATE:-30}"
+fi
+
+echo ""
+echo "Streaming Configuration:"
+echo "  Encoder: ${SELKIES_ENCODER}"
+echo "  Framerate: ${SELKIES_FRAMERATE:-60} fps"
+echo "  Bitrate: ${SELKIES_VIDEO_BITRATE:-8000} kbps"
+echo "  Resolution: auto (resizable)"
+echo ""
+
+# Start supervisord
+exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf

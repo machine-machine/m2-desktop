@@ -1,122 +1,183 @@
-# VNC + noVNC + Clawdbot desktop worker (Pretty XFCE4 with macOS styling)
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# =============================================================================
+# Clawdbot Desktop Worker - Selkies-GStreamer + XFCE4 + WhiteSur Theme
+# GPU-accelerated remote desktop with macOS-style appearance
+# =============================================================================
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    LANG=en_US.UTF-8 \
+FROM ubuntu:22.04
+
+# Build args
+ARG DEBIAN_FRONTEND=noninteractive
+ARG SELKIES_VERSION=1.6.0
+
+# Environment
+ENV LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8 \
+    TZ=UTC \
     USER=developer \
-    VNC_PASSWORD=clawdbot \
-    DISPLAY=:1 \
+    UID=1000 \
+    GID=1000 \
+    HOME=/home/developer \
+    DISPLAY=:0 \
+    XDG_RUNTIME_DIR=/tmp/runtime-developer \
+    # Selkies configuration
+    SELKIES_ENCODER=nvh264enc \
+    SELKIES_ENABLE_RESIZE=true \
+    SELKIES_FRAMERATE=60 \
+    SELKIES_VIDEO_BITRATE=8000 \
+    SELKIES_ENABLE_BASIC_AUTH=true \
+    # Clawdbot paths
     CLAWDBOT_HOME=/clawdbot_home \
     WORKSPACE=/workspace
 
-# Base packages + XFCE4 desktop environment + theme build dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      locales \
-      sudo \
-      dbus-x11 \
-      # VNC stack
-      tigervnc-standalone-server tigervnc-tools \
-      novnc websockify \
-      x11-xserver-utils \
-      # XFCE4 desktop environment (lightweight, VNC-friendly)
-      xfce4 \
-      xfce4-terminal \
-      xfce4-taskmanager \
-      xfce4-screenshooter \
-      thunar \
-      mousepad \
-      # macOS-style dock
-      plank \
-      # Theme build dependencies (required for WhiteSur)
-      sassc \
-      libglib2.0-dev-bin \
-      libxml2-utils \
-      # Core utilities
-      curl ca-certificates wget \
-      git \
-      bash \
-      supervisor \
-      htop \
-      nano \
-      # Browser for Claude Max / Clawdbot browser auth
-      chromium-browser \
-      fonts-liberation fonts-dejavu-core fonts-noto-color-emoji \
-      libnss3 libxss1 libasound2 \
-      # VS Code dependencies (optional, for future)
-      libsecret-1-0 \
-    && locale-gen en_US.UTF-8 && \
-    # Clean up
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/* /tmp/*
+# =============================================================================
+# Base System + NVIDIA Support
+# =============================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Locale
+    locales \
+    # Core utilities
+    sudo ca-certificates curl wget git nano htop \
+    # X11 and display
+    xvfb x11-utils x11-xserver-utils xdotool xclip \
+    # PulseAudio for audio support
+    pulseaudio pavucontrol \
+    # XFCE4 Desktop (lightweight)
+    xfce4 xfce4-terminal xfce4-taskmanager thunar mousepad \
+    # Plank dock (macOS-style)
+    plank \
+    # Theme dependencies + fallback themes
+    sassc libglib2.0-dev-bin libxml2-utils gtk2-engines-murrine \
+    arc-theme papirus-icon-theme dmz-cursor-theme \
+    # Fonts
+    fonts-inter fonts-noto fonts-noto-color-emoji fonts-dejavu-core \
+    # Browser
+    chromium-browser fonts-liberation libnss3 libxss1 libasound2 \
+    # Python for Selkies
+    python3 python3-pip python3-dev python3-gi python3-gi-cairo \
+    gir1.2-gtk-3.0 gir1.2-gst-plugins-base-1.0 gir1.2-gstreamer-1.0 \
+    # GStreamer
+    gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-pulseaudio \
+    gstreamer1.0-x gstreamer1.0-gl \
+    # NVIDIA GStreamer plugins (for NVENC)
+    gstreamer1.0-vaapi \
+    # Process management
+    supervisor dbus-x11 \
+    # Networking
+    net-tools iproute2 \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -s /bin/bash ${USER} && \
-    echo "${USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER}
+# =============================================================================
+# NVIDIA NVENC Support
+# =============================================================================
+# Install NVIDIA GStreamer plugins for hardware encoding
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libnvidia-encode-550 \
+    && rm -rf /var/lib/apt/lists/* \
+    || echo "NVIDIA encode libs will come from host driver"
 
-# Switch to developer user for theme installation (themes install to ~/.themes)
+# =============================================================================
+# Create User
+# =============================================================================
+RUN groupadd -g ${GID} ${USER} && \
+    useradd -m -s /bin/bash -u ${UID} -g ${GID} ${USER} && \
+    echo "${USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USER} && \
+    chmod 0440 /etc/sudoers.d/${USER}
+
+# =============================================================================
+# Install Selkies-GStreamer
+# =============================================================================
+RUN pip3 install --no-cache-dir \
+    selkies-gstreamer==${SELKIES_VERSION} \
+    websockets \
+    basicauth
+
+# =============================================================================
+# Install Node.js 22 + Clawdbot
+# =============================================================================
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    npm install -g clawdbot@latest
+
+# =============================================================================
+# Install WhiteSur Theme (macOS-style)
+# =============================================================================
 USER ${USER}
-WORKDIR /home/${USER}
+WORKDIR /tmp
 
-# Install WhiteSur GTK theme (macOS-style)
+# WhiteSur GTK Theme (with error handling)
 RUN git clone https://github.com/vinceliuice/WhiteSur-gtk-theme.git --depth=1 && \
     cd WhiteSur-gtk-theme && \
-    ./install.sh -c Dark -l && \
-    cd .. && rm -rf WhiteSur-gtk-theme
+    (bash ./install.sh -c Dark -l --tweaks normal || bash ./install.sh -c Dark || echo "WhiteSur GTK install failed") && \
+    cd .. && rm -rf WhiteSur-gtk-theme || true
 
-# Install WhiteSur icon theme
+# WhiteSur Icon Theme (with error handling)
 RUN git clone https://github.com/vinceliuice/WhiteSur-icon-theme.git --depth=1 && \
     cd WhiteSur-icon-theme && \
-    ./install.sh && \
-    cd .. && rm -rf WhiteSur-icon-theme
+    (bash ./install.sh || echo "WhiteSur icons install failed") && \
+    cd .. && rm -rf WhiteSur-icon-theme || true
 
-# Install McMojave cursors (macOS-style)
+# McMojave Cursors (with error handling)
 RUN git clone https://github.com/vinceliuice/McMojave-cursors.git --depth=1 && \
     cd McMojave-cursors && \
-    ./install.sh && \
-    cd .. && rm -rf McMojave-cursors
+    (bash ./install.sh || echo "McMojave cursors install failed") && \
+    cd .. && rm -rf McMojave-cursors || true
 
-# Download WhiteSur wallpaper
+# Download wallpaper
 RUN mkdir -p ~/.local/share/backgrounds && \
     curl -sL "https://raw.githubusercontent.com/vinceliuice/WhiteSur-wallpapers/main/4k/WhiteSur-dark.png" \
-    -o ~/.local/share/backgrounds/wallpaper.png || true
+    -o ~/.local/share/backgrounds/wallpaper.png || \
+    echo "Wallpaper download failed, will use default"
 
-# Install Node 22 (via NodeSource) and Clawdbot
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && \
-    sudo apt-get update && \
-    sudo apt-get install -y nodejs && \
-    sudo rm -rf /var/lib/apt/lists/* && \
-    sudo npm install -g clawdbot@latest
+# =============================================================================
+# Configure XFCE4
+# =============================================================================
+USER ${USER}
+RUN mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml \
+             ~/.config/xfce4/panel \
+             ~/.config/plank/dock1/launchers \
+             ~/.local/share/applications \
+             ~/Desktop
 
-# Prepare directories
-RUN sudo mkdir -p ${CLAWDBOT_HOME} ${WORKSPACE} && \
-    sudo chown -R ${USER}:${USER} ${CLAWDBOT_HOME} ${WORKSPACE}
-
-# Configure XFCE4 for VNC (disable compositing, set theme)
-RUN mkdir -p /home/${USER}/.config/xfce4/xfconf/xfce-perchannel-xml && \
-    mkdir -p /home/${USER}/.config/xfce4/panel && \
-    mkdir -p /home/${USER}/.config/plank/dock1/launchers && \
-    mkdir -p /home/${USER}/Desktop
-
-VOLUME ["${CLAWDBOT_HOME}", "${WORKSPACE}"]
-
-# Copy configs
 USER root
+
+# =============================================================================
+# Create Directories
+# =============================================================================
+RUN mkdir -p ${CLAWDBOT_HOME} ${WORKSPACE} ${XDG_RUNTIME_DIR} && \
+    chown -R ${USER}:${USER} ${CLAWDBOT_HOME} ${WORKSPACE} ${XDG_RUNTIME_DIR}
+
+# =============================================================================
+# Copy Configuration Files
+# =============================================================================
+COPY --chown=${USER}:${USER} config/xfce4/ /home/${USER}/.config/xfce4/
+COPY --chown=${USER}:${USER} config/plank/ /home/${USER}/.config/plank/
+COPY --chown=${USER}:${USER} config/desktop/ /home/${USER}/Desktop/
+COPY --chown=${USER}:${USER} config/autostart/ /home/${USER}/.config/autostart/
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY scripts/xstartup /home/developer/.vnc/xstartup
-COPY config/xfce4/ /home/developer/.config/xfce4/
-COPY config/plank/ /home/developer/.config/plank/
-COPY config/desktop/ /home/developer/Desktop/
+COPY scripts/start-desktop.sh /usr/local/bin/start-desktop.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh && \
-    chmod +x /home/developer/.vnc/xstartup && \
-    chown -R developer:developer /home/developer
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start-desktop.sh && \
+    chown -R ${USER}:${USER} /home/${USER}
 
-# Create index.html redirect
-RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=/vnc.html"></head></html>' > /usr/share/novnc/index.html
+# =============================================================================
+# Volumes & Ports
+# =============================================================================
+VOLUME ["${CLAWDBOT_HOME}", "${WORKSPACE}"]
 
-EXPOSE 18789 6080
+# Selkies WebRTC (8080) + Clawdbot Gateway (18789)
+EXPOSE 8080 18789
 
+# =============================================================================
+# Healthcheck
+# =============================================================================
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/ || exit 1
+
+# =============================================================================
+# Entrypoint
+# =============================================================================
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
