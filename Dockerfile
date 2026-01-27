@@ -31,6 +31,7 @@ RUN apt-get update && \
       plank \
       # Theme build dependencies (required for WhiteSur)
       sassc \
+      libglib2.0-dev \
       libglib2.0-dev-bin \
       libxml2-utils \
       # Core utilities
@@ -62,7 +63,7 @@ WORKDIR /home/${USER}
 # Install WhiteSur GTK theme (macOS-style)
 RUN git clone https://github.com/vinceliuice/WhiteSur-gtk-theme.git --depth=1 && \
     cd WhiteSur-gtk-theme && \
-    ./install.sh -c Dark -l && \
+    ./install.sh -c Dark && \
     cd .. && rm -rf WhiteSur-gtk-theme
 
 # Install WhiteSur icon theme
