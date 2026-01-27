@@ -7,8 +7,10 @@ unset DBUS_SESSION_BUS_ADDRESS
 # Set display
 export DISPLAY=:1
 
-# Start D-Bus session bus
-eval $(dbus-launch --sh-syntax)
+# Start D-Bus session bus (XFCE requires it)
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval $(dbus-launch --sh-syntax --exit-with-session)
+fi
 
 # Disable XFCE compositor (critical for VNC performance)
 xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null || true
@@ -16,5 +18,5 @@ xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null || true
 # Start Plank dock (macOS-style)
 plank &
 
-# Start XFCE4 session
+# Start XFCE4 session (exec replaces the shell)
 exec startxfce4
