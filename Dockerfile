@@ -3,7 +3,7 @@
 # GPU-accelerated remote desktop with macOS-style appearance
 # =============================================================================
 
-# Selkies base image (includes GStreamer, NVENC, WebRTC, PulseAudio, Xvfb)
+# Selkies GStreamer base image (GStreamer + NVENC libraries only)
 FROM ghcr.io/selkies-project/selkies-gstreamer/gstreamer:main-ubuntu20.04
 
 # Build args
@@ -52,8 +52,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-inter fonts-noto fonts-noto-color-emoji fonts-dejavu-core \
     # Browser
     chromium-browser fonts-liberation libnss3 libxss1 libasound2 \
-    # Process management
-    supervisor dbus-x11 \
+    # Process management & audio
+    supervisor dbus dbus-x11 pulseaudio \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -66,9 +66,10 @@ RUN groupadd -g ${GID} ${USER} 2>/dev/null || true && \
     chmod 0440 /etc/sudoers.d/${USER}
 
 # =============================================================================
-# Install additional Python dependencies (selkies-gstreamer is in base image)
+# Install Selkies-GStreamer + dependencies
 # =============================================================================
 RUN pip3 install --no-cache-dir \
+    "https://github.com/selkies-project/selkies-gstreamer/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
     websockets \
     basicauth
 
