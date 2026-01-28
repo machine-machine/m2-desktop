@@ -66,10 +66,9 @@ RUN groupadd -g ${GID} ${USER} 2>/dev/null || true && \
     chmod 0440 /etc/sudoers.d/${USER}
 
 # =============================================================================
-# Install Selkies-GStreamer from GitHub wheel
+# Install additional Python dependencies (selkies-gstreamer is in base image)
 # =============================================================================
-RUN pip3 install --no-cache-dir --break-system-packages \
-    "https://github.com/selkies-project/selkies-gstreamer/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
+RUN pip3 install --no-cache-dir \
     websockets \
     basicauth
 
