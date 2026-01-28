@@ -39,9 +39,9 @@ services:
     # Required for Selkies/Chrome shared memory
     shm_size: '2gb'
 
-    expose:
-      - "8080"   # Selkies WebRTC (was 6080 for noVNC)
-      - "18789"  # Clawdbot Gateway (unchanged)
+    # Ports exposed via Traefik labels (loadbalancer.server.port)
+    # - 8080: Selkies WebRTC
+    # - 18789: Clawdbot Gateway (add second domain in Coolify if needed)
 
     volumes:
       - clawdbot_home:/clawdbot_home
