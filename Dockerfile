@@ -4,7 +4,7 @@
 # =============================================================================
 
 # Selkies base image (includes GStreamer, NVENC, WebRTC, PulseAudio, Xvfb)
-FROM ghcr.io/selkies-project/selkies-gstreamer:24.04-20240701
+FROM ghcr.io/selkies-project/selkies-gstreamer/gstreamer:main-ubuntu20.04
 
 # Build args
 ARG DEBIAN_FRONTEND=noninteractive
