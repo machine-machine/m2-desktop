@@ -30,6 +30,8 @@ services:
 
     deploy:
       resources:
+        limits:
+          cpus: "42"  # 66% of 64 cores
         reservations:
           devices:
             - driver: nvidia

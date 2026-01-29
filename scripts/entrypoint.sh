@@ -65,10 +65,14 @@ if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
     echo "✓ NVIDIA GPU detected:"
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
     export SELKIES_ENCODER="${SELKIES_ENCODER:-nvh264enc}"
+    # Default to GPU 1 (second GPU) - override with SELKIES_GPU_ID env var
+    export SELKIES_GPU_ID="${SELKIES_GPU_ID:-1}"
+    echo "  Using GPU: ${SELKIES_GPU_ID}"
 else
     echo "⚠ No NVIDIA GPU detected, using software encoding"
     export SELKIES_ENCODER="x264enc"
     export SELKIES_FRAMERATE="${SELKIES_FRAMERATE:-30}"
+    export SELKIES_GPU_ID="0"
 fi
 
 # =============================================================================
