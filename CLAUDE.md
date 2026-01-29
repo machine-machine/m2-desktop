@@ -97,9 +97,87 @@ supervisorctl restart selkies
 
 The entrypoint auto-detects GPU and falls back to `x264enc` with 30fps if no NVIDIA GPU is found.
 
-## Coolify Deployment
+## Coolify Deployment (selkies branch)
 
-Configure two domains in Coolify:
+**This section is specific to the `selkies` branch deployment on Coolify.**
+
+### Application Details
+
+| Property | Value |
+|----------|-------|
+| Project | `machine.machine` |
+| Application UUID | `t44s0oww0sc4koko88ocs84w` |
+| Coolify URL Path | `/project/q8w4cwskgwkgg0cg00k00coo/environment/tkgkkwc0w0cso4ooc48848c4/application/t44s0oww0sc4koko88ocs84w` |
+| Container Name Pattern | `clawdbot-desktop-worker-oksko*` |
+| Desktop Port | 8080 (Selkies WebRTC) |
+| Gateway Port | 18789 (Clawdbot WebSocket) |
+
+### Deployment Workflow
+
+Commits pushed to the `selkies` branch automatically trigger a rebuild and redeploy on Coolify.
+
+```bash
+# Make changes, commit, and push to trigger deployment
+git add <files>
+git commit -m "fix: Description of change"
+git push origin selkies
+
+# Wait ~2-3 minutes for build and deploy
+# Then check logs to verify
+```
+
+### Debugging from Host (Coolify Server)
+
+The repo is checked out at `/home/hi/coolify-repos/clawdbot-desktop` on the Coolify host.
+
+```bash
+# Find the running container
+docker ps --filter "name=clawdbot-desktop-worker"
+
+# View container logs (most recent)
+docker logs --tail 100 $(docker ps -q --filter "name=clawdbot-desktop-worker")
+
+# Follow logs in real-time
+docker logs -f $(docker ps -q --filter "name=clawdbot-desktop-worker")
+
+# Check supervisor status inside container
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") supervisorctl status
+
+# View specific service logs inside container
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/selkies.log
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/xorg.log
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/xfce4.log
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/clawdbot.log
+
+# Get shell into container
+docker exec -it $(docker ps -q --filter "name=clawdbot-desktop-worker") bash
+```
+
+### Coolify MCP (When Available)
+
+The Coolify MCP tools can be used when API access is configured:
+
+```
+mcp__coolify__get_application         uuid: t44s0oww0sc4koko88ocs84w
+mcp__coolify__get_application_logs    uuid: t44s0oww0sc4koko88ocs84w
+mcp__coolify__restart_application     uuid: t44s0oww0sc4koko88ocs84w
+```
+
+Note: If MCP returns 403 errors, check the Coolify API token configuration.
+
+### Common Issues & Fixes
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| Old version deployed | Logs show `vncserver`/`novnc` instead of `selkies` | Push to selkies branch to trigger redeploy |
+| vncserver FATAL | `gave up: vncserver entered FATAL state` | Check if using Selkies (expected) or VNC (outdated) |
+| Xorg won't start | No display available | Check `/var/log/xorg.log` for driver issues |
+| Selkies not connecting | WebSocket errors | Verify Traefik labels and port 8080 exposure |
+| Container unhealthy | Healthcheck fails | Check if port 8080 is responding |
+
+### Port Mapping
+
+The docker-compose.yml uses Traefik labels for routing:
 - Desktop domain → port **8080** (Selkies WebRTC)
 - Gateway domain → port **18789** (Clawdbot API)
 

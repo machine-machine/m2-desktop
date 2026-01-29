@@ -10,6 +10,10 @@ mkdir -p /tmp/runtime-developer
 chmod 700 /tmp/runtime-developer
 chown developer:developer /tmp/runtime-developer
 
+# Create D-Bus socket directory (required for dbus-daemon)
+mkdir -p /var/run/dbus
+chown messagebus:messagebus /var/run/dbus 2>/dev/null || chown root:root /var/run/dbus
+
 # Ensure volumes are owned by developer
 chown -R developer:developer ${CLAWDBOT_HOME} ${WORKSPACE} 2>/dev/null || true
 
