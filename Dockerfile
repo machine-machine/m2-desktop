@@ -66,12 +66,19 @@ RUN groupadd -g ${GID} ${USER} 2>/dev/null || true && \
     chmod 0440 /etc/sudoers.d/${USER}
 
 # =============================================================================
-# Install Selkies-GStreamer + dependencies
+# Install Selkies-GStreamer + dependencies + web frontend
 # =============================================================================
 RUN pip3 install --no-cache-dir \
     "https://github.com/selkies-project/selkies-gstreamer/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
     websockets \
     basicauth
+
+# Download and extract Selkies web frontend (required for the UI)
+RUN curl -fsSL "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/selkies-gstreamer-web_v${SELKIES_VERSION}.tar.gz" \
+    | tar -xzf - -C /opt && \
+    # Also install xsel for clipboard support
+    apt-get update && apt-get install -y --no-install-recommends xsel && \
+    rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
 # Install Node.js 22 + Clawdbot
