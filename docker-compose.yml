@@ -14,9 +14,9 @@ services:
       # Auth (same VNC_PASSWORD as before!)
       VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
 
-      # Selkies-GStreamer (using x264enc until NVENC resolution issue is fixed)
-      SELKIES_ENCODER: x264enc
-      SELKIES_FRAMERATE: 30
+      # Selkies-GStreamer
+      SELKIES_ENCODER: nvh264enc
+      SELKIES_FRAMERATE: 60
       SELKIES_VIDEO_BITRATE: 8000
       SELKIES_ENABLE_RESIZE: "true"
       SELKIES_ENABLE_BASIC_AUTH: "true"
