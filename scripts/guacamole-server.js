@@ -326,9 +326,14 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Initialize guacamole-lite WebSocket server
+// Initialize guacamole-lite WebSocket server on /websocket path
+const wsOptions = {
+    server: server,
+    path: '/websocket'  // Explicit path to avoid conflict with Express routes
+};
+
 const guacServer = new GuacamoleLite(
-    { server },           // HTTP server to attach WebSocket to
+    wsOptions,
     {
         host: GUACD_HOST,
         port: GUACD_PORT,
