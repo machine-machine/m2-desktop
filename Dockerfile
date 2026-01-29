@@ -109,7 +109,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
 # =============================================================================
 # Install Cargstore (App Store)
 # =============================================================================
-ARG CARGSTORE_VERSION=0.2.0
+ARG CARGSTORE_VERSION=0.2.1
 RUN mkdir -p /opt/cargstore && \
     curl -fsSL "https://github.com/machine-machine/cargstore/releases/download/v${CARGSTORE_VERSION}/cargstore-${CARGSTORE_VERSION}.tar.gz" \
     | tar -xzf - -C /opt/cargstore --strip-components=1 && \
