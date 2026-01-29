@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Locale
     locales \
     # Core utilities
-    sudo ca-certificates curl wget git nano htop \
+    sudo ca-certificates curl wget git nano htop software-properties-common \
     # X11 and display
     xserver-xorg-video-dummy xserver-xorg-core x11-utils x11-xserver-utils xdotool xclip \
     # XFCE4 Desktop (lightweight)
@@ -56,10 +56,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation libnss3 libxss1 libasound2 libatk-bridge2.0-0 libgtk-3-0 \
     # Process management & audio
     supervisor dbus dbus-x11 pulseaudio \
-    # Flatpak for app installation
-    flatpak \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install newer Flatpak from PPA (Ubuntu 20.04's version is too old for current Flathub)
+RUN add-apt-repository -y ppa:flatpak/stable && \
+    apt-get update && \
+    apt-get install -y flatpak && \
+    rm -rf /var/lib/apt/lists/*
 
 # Add Flathub repository (system-wide, user apps go to persistent volume)
 RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
