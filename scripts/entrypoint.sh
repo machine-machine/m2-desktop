@@ -89,14 +89,19 @@ rm -f /tmp/rtc.json
 ICE_SERVERS='{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}'
 
 if [ -n "${TURN_HOST}" ]; then
-    TURN_PORT="${TURN_PORT:-3478}"
+    TURN_PORT="${TURN_PORT:-80}"
     TURN_URLS="turn:${TURN_HOST}:${TURN_PORT}"
-    TURNS_URLS="turns:${TURN_HOST}:${TURN_PORT}"
+    # Only include turns:// URL for port 443 (TLS)
+    if [ "${TURN_PORT}" = "443" ]; then
+        TURN_URL_LIST="\"${TURN_URLS}\", \"turns:${TURN_HOST}:${TURN_PORT}\""
+    else
+        TURN_URL_LIST="\"${TURN_URLS}\""
+    fi
 
     if [ -n "${TURN_USERNAME}" ] && [ -n "${TURN_PASSWORD}" ]; then
-        TURN_SERVER="{\"urls\": [\"${TURN_URLS}\", \"${TURNS_URLS}\"], \"username\": \"${TURN_USERNAME}\", \"credential\": \"${TURN_PASSWORD}\"}"
+        TURN_SERVER="{\"urls\": [${TURN_URL_LIST}], \"username\": \"${TURN_USERNAME}\", \"credential\": \"${TURN_PASSWORD}\"}"
     else
-        TURN_SERVER="{\"urls\": [\"${TURN_URLS}\", \"${TURNS_URLS}\"]}"
+        TURN_SERVER="{\"urls\": [${TURN_URL_LIST}]}"
     fi
     ICE_SERVERS="${ICE_SERVERS}, ${TURN_SERVER}"
     echo "✓ TURN server configured: ${TURN_HOST}:${TURN_PORT}"
