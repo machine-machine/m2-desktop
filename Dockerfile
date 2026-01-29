@@ -84,10 +84,9 @@ RUN cd /tmp && \
     cd / && rm -rf /tmp/guacamole-server*
 
 # =============================================================================
-# Install newer Flatpak from PPA
+# Install Flatpak (from Ubuntu repos - PPA can be flaky)
 # =============================================================================
-RUN add-apt-repository -y ppa:flatpak/stable && \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y flatpak && \
     rm -rf /var/lib/apt/lists/*
 
