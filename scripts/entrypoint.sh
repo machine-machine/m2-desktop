@@ -2,7 +2,7 @@
 set -e
 
 echo "=============================================="
-echo " Clawdbot Desktop Worker - Selkies-GStreamer"
+echo " Clawdbot Desktop Worker - Apache Guacamole"
 echo "=============================================="
 
 # Create runtime directories
@@ -54,7 +54,7 @@ for config_pair in "${PERSIST_CONFIGS[@]}"; do
 done
 
 chown -R developer:developer "${DESKTOP_CONFIG}"
-echo "✓ Desktop settings persistent at ${DESKTOP_CONFIG}"
+echo "Desktop settings persistent at ${DESKTOP_CONFIG}"
 
 # =============================================================================
 # Initialize Flatpak user directory (persistent storage for apps)
@@ -87,92 +87,34 @@ EOF
 chown -R developer:developer /home/developer/.config/mimeapps.list
 
 # =============================================================================
-# Map VNC_PASSWORD to Selkies auth (backwards compatibility)
+# Configure VNC password for x11vnc
 # =============================================================================
-export SELKIES_BASIC_AUTH_USER="${SELKIES_BASIC_AUTH_USER:-developer}"
-export SELKIES_BASIC_AUTH_PASSWORD="${VNC_PASSWORD:-clawdbot}"
+VNC_PASSWORD="${VNC_PASSWORD:-clawdbot}"
+mkdir -p /tmp
+x11vnc -storepasswd "${VNC_PASSWORD}" /tmp/.vnc_passwd
+chmod 644 /tmp/.vnc_passwd
 
+echo ""
 echo "Authentication:"
-echo "  Username: ${SELKIES_BASIC_AUTH_USER}"
+echo "  Username: developer"
 echo "  Password: [set from VNC_PASSWORD]"
 echo ""
 
 # =============================================================================
-# Detect GPU and configure encoder
+# Configure Guacamole environment
 # =============================================================================
-if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
-    echo "✓ NVIDIA GPU detected:"
-    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-    export SELKIES_ENCODER="${SELKIES_ENCODER:-nvh264enc}"
-    # Default to GPU 1 (second GPU) - override with SELKIES_GPU_ID env var
-    export SELKIES_GPU_ID="${SELKIES_GPU_ID:-1}"
-    echo "  Using GPU: ${SELKIES_GPU_ID}"
-else
-    echo "⚠ No NVIDIA GPU detected, using software encoding"
-    export SELKIES_ENCODER="x264enc"
-    export SELKIES_FRAMERATE="${SELKIES_FRAMERATE:-30}"
-    export SELKIES_GPU_ID="0"
-fi
+export GUAC_AUTH_ENABLED="${GUAC_AUTH_ENABLED:-true}"
+export GUAC_AUTH_USER="${GUAC_AUTH_USER:-developer}"
+export GUAC_AUTH_PASSWORD="${GUAC_AUTH_PASSWORD:-${VNC_PASSWORD}}"
 
-# =============================================================================
-# Configure ICE servers for WebRTC (STUN/TURN for NAT traversal)
-# =============================================================================
-# STUN helps discover public IPs, but TURN is required for relay when direct
-# P2P connections fail (restrictive firewalls, symmetric NAT, etc.)
-#
-# Environment variables for TURN:
-#   TURN_HOST     - TURN server hostname (e.g., turn.example.com)
-#   TURN_PORT     - TURN server port (default: 3478)
-#   TURN_USERNAME - TURN authentication username
-#   TURN_PASSWORD - TURN authentication password
-#
-rm -f /tmp/rtc.json
-
-# Build ICE servers JSON
-ICE_SERVERS='{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}'
-
-if [ -n "${TURN_HOST}" ]; then
-    TURN_PORT="${TURN_PORT:-80}"
-    # Use TCP transport (UDP often blocked), add ?transport=tcp for browser compatibility
-    TURN_URLS="turn:${TURN_HOST}:${TURN_PORT}?transport=tcp"
-    # Only include turns:// URL for port 443 (TLS)
-    if [ "${TURN_PORT}" = "443" ]; then
-        TURN_URL_LIST="\"${TURN_URLS}\", \"turns:${TURN_HOST}:${TURN_PORT}?transport=tcp\""
-    else
-        TURN_URL_LIST="\"${TURN_URLS}\""
-    fi
-
-    if [ -n "${TURN_USERNAME}" ] && [ -n "${TURN_PASSWORD}" ]; then
-        TURN_SERVER="{\"urls\": [${TURN_URL_LIST}], \"username\": \"${TURN_USERNAME}\", \"credential\": \"${TURN_PASSWORD}\"}"
-    else
-        TURN_SERVER="{\"urls\": [${TURN_URL_LIST}]}"
-    fi
-    ICE_SERVERS="${ICE_SERVERS}, ${TURN_SERVER}"
-    echo "✓ TURN server configured: ${TURN_HOST}:${TURN_PORT} (TCP)"
-else
-    echo "⚠ No TURN server configured (set TURN_HOST, TURN_USERNAME, TURN_PASSWORD)"
-    echo "  External users behind restrictive NATs may not be able to connect"
-fi
-
-cat > /tmp/rtc.json << EOF
-{
-  "lifetimeDuration": "86400s",
-  "iceServers": [
-    ${ICE_SERVERS}
-  ],
-  "blockStatus": "NOT_BLOCKED",
-  "iceTransportPolicy": "all"
-}
-EOF
-chown developer:developer /tmp/rtc.json
-
+echo "Remote Desktop Configuration (Guacamole):"
+echo "  Web interface: port 8080"
+echo "  Multi-user: enabled (all users share same session)"
+echo "  VNC backend: x11vnc on port 5900"
+echo "  Protocol: guacd on port 4822"
 echo ""
-echo "Streaming Configuration:"
-echo "  Encoder: ${SELKIES_ENCODER}"
-echo "  Framerate: ${SELKIES_FRAMERATE:-60} fps"
-echo "  Bitrate: ${SELKIES_VIDEO_BITRATE:-8000} kbps"
-echo "  Resolution: auto (resizable)"
-echo "  ICE: Google STUN + ${TURN_HOST:-'no TURN (add TURN_HOST env var)'}"
+echo "Architecture:"
+echo "  Browser -> Guacamole-Lite (8080) -> guacd (4822) -> x11vnc (5900) -> Xorg :0"
 echo ""
 
 # Start supervisord

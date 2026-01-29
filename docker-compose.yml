@@ -11,20 +11,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 
-      # Auth (same VNC_PASSWORD as before!)
+      # Auth (VNC_PASSWORD for both x11vnc and Guacamole web auth)
       VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
 
-      # Selkies-GStreamer
-      SELKIES_ENCODER: nvh264enc
-      SELKIES_FRAMERATE: 60
-      SELKIES_VIDEO_BITRATE: 8000
-      SELKIES_ENABLE_RESIZE: "true"
-      SELKIES_ENABLE_BASIC_AUTH: "true"
-      # Use Google's public STUN server to help WebRTC find the connection
-      SELKIES_P2P_STUN_HOST: stun.l.google.com
-      SELKIES_P2P_STUN_PORT: 19302
-
-      # GPU (need 'all' for NVENC encoding)
+      # GPU (for desktop apps that use GPU acceleration)
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
 
@@ -38,14 +28,14 @@ services:
               count: all
               capabilities: ["gpu", "compute", "utility", "video"]
 
-    # Required for Selkies/Chrome shared memory
+    # Required for Chrome shared memory
     shm_size: '2gb'
 
     # Required for Flatpak apps (bubblewrap needs user namespaces)
     privileged: true
 
     # Ports exposed via Traefik labels (loadbalancer.server.port)
-    # - 8080: Selkies WebRTC
+    # - 8080: Guacamole HTML5 client
     # - 18789: Clawdbot Gateway (add second domain in Coolify if needed)
 
     volumes:
@@ -55,7 +45,7 @@ services:
       # - /var/run/docker.sock:/var/run/docker.sock
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -qE '^(200|401)$'"]
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health | grep -q '200'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -63,13 +53,13 @@ services:
 
     labels:
       - traefik.enable=true
-      # Route to Selkies WebRTC on port 8080
+      # Route to Guacamole on port 8080
       - traefik.http.services.clawdbot-desktop-worker.loadbalancer.server.port=8080
       # HTTP router (Cloudflare handles HTTPS)
       - traefik.http.routers.clawdbot-desktop.rule=Host(`m2.machinemachine.ai`)
       - traefik.http.routers.clawdbot-desktop.entrypoints=http
       - traefik.http.routers.clawdbot-desktop.service=clawdbot-desktop-worker
-      # WebSocket support for WebRTC signaling
+      # WebSocket support for Guacamole
       - traefik.http.middlewares.clawdbot-ws.headers.customrequestheaders.Connection=keep-alive, Upgrade
       - traefik.http.middlewares.clawdbot-ws.headers.customrequestheaders.Upgrade=websocket
       - traefik.http.routers.clawdbot-desktop.middlewares=clawdbot-ws

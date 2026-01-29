@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`clawdbot-desktop` is a GPU-accelerated Dockerized XFCE4 desktop that runs Clawdbot Gateway and exposes a web-based remote desktop session via Selkies-GStreamer WebRTC streaming. It provides a persistent "AI worker PC" with a full Linux desktop inside a container, remotely accessible from any browser with ~20ms latency using NVENC hardware encoding.
+`clawdbot-desktop` is a multi-user HTML5 remote desktop that runs Clawdbot Gateway and exposes a web-based desktop session via Apache Guacamole. It provides a persistent "AI worker PC" with a full Linux desktop inside a container, remotely accessible from any browser with **multi-user session sharing** - multiple users can view and control the same desktop simultaneously.
 
 ## Architecture
 
@@ -19,8 +19,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 │  ├── PulseAudio (priority 10)                   │
 │  ├── Xorg + dummy driver (priority 15)          │
 │  ├── XFCE4 + Plank dock (priority 20)           │
-│  ├── Selkies-GStreamer (priority 30)            │
-│  │   └── Port 8080 (WebRTC)                     │
+│  ├── x11vnc (priority 25)                       │
+│  │   └── Port 5900 (VNC, localhost only)        │
+│  ├── guacd (priority 28)                        │
+│  │   └── Port 4822 (Guacamole protocol)         │
+│  ├── Guacamole-Lite (priority 30)               │
+│  │   └── Port 8080 (HTML5 web client)           │
 │  └── Clawdbot Gateway (priority 40)             │
 │      └── Port 18789 (WebSocket)                 │
 │                                                 │
@@ -32,9 +36,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 └─────────────────────────────────────────────────┘
 ```
 
+### Data Flow
+
+```
+Browser → Guacamole-Lite (8080) → guacd (4822) → x11vnc (5900) → Xorg :0
+        WebSocket              Guacamole protocol   VNC protocol   X11
+```
+
 **Key Components:**
-- Base Image: `ghcr.io/selkies-project/selkies-gstreamer/gstreamer:main-ubuntu20.04`
-- Streaming: Selkies-GStreamer v1.6.0 with NVENC hardware encoding
+- Base Image: Ubuntu 22.04
+- Remote Desktop: Apache Guacamole (guacd + guacamole-lite)
+- VNC Server: x11vnc (shares existing X11 display)
 - Desktop: XFCE4 with WhiteSur macOS-style theme + Plank dock
 - Display: Xorg with dummy driver at 1920x1080
 - Process Manager: Supervisord
@@ -47,14 +59,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 docker compose -f docker-compose.local.yml up -d
 # Access: http://localhost:8080
 
-# Production (requires NVIDIA Container Toolkit)
+# Production (with GPU for desktop apps)
 docker compose up -d
 
 # Rebuild after changes
 docker compose build --no-cache
-
-# Verify GPU access inside container
-docker compose exec clawdbot-desktop-worker nvidia-smi
 
 # Get a shell inside the container
 docker compose exec clawdbot-desktop-worker bash
@@ -67,14 +76,16 @@ docker compose exec clawdbot-desktop-worker bash
 supervisorctl status
 
 # View logs
-tail -f /var/log/selkies.log    # Selkies-GStreamer
+tail -f /var/log/guacamole.log  # Guacamole-Lite
+tail -f /var/log/x11vnc.log     # x11vnc VNC server
+tail -f /var/log/guacd.log      # guacd protocol daemon
 tail -f /var/log/xorg.log       # X server
 tail -f /var/log/xfce4.log      # XFCE session
 tail -f /var/log/clawdbot.log   # Clawdbot Gateway
 
 # Restart a specific service
 supervisorctl restart xfce4
-supervisorctl restart selkies
+supervisorctl restart guacamole
 ```
 
 ## Key Files
@@ -82,8 +93,9 @@ supervisorctl restart selkies
 | File | Purpose |
 |------|---------|
 | `scripts/supervisord.conf` | Process definitions and startup order |
-| `scripts/entrypoint.sh` | GPU detection, auth setup, starts supervisord |
+| `scripts/entrypoint.sh` | VNC password setup, starts supervisord |
 | `scripts/start-desktop.sh` | XFCE session startup, theme config, Plank launch |
+| `scripts/guacamole-server.js` | Guacamole-Lite WebSocket server |
 | `config/xorg.conf` | Xorg dummy driver config (1920x1080 resolution) |
 | `config/xfce4/` | XFCE panel, theme, and window manager settings |
 | `config/plank/` | Plank dock configuration and launcher items |
@@ -92,79 +104,41 @@ supervisorctl restart selkies
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VNC_PASSWORD` | `clawdbot` | Maps to `SELKIES_BASIC_AUTH_PASSWORD` |
-| `SELKIES_ENCODER` | `nvh264enc` | Video encoder (`nvh264enc` for GPU, `x264enc` for CPU) |
-| `SELKIES_FRAMERATE` | `60` | Target framerate (30 for CPU encoding) |
-| `SELKIES_VIDEO_BITRATE` | `8000` | Bitrate in kbps |
-| `SELKIES_GPU_ID` | `0` | GPU index for NVENC encoding (0, 1, etc.) |
-| `TURN_HOST` | (none) | TURN server hostname for WebRTC relay |
-| `TURN_PORT` | `80` | TURN server port (80 for TCP, 443 for TLS) |
-| `TURN_USERNAME` | (none) | TURN authentication username |
-| `TURN_PASSWORD` | (none) | TURN authentication password |
+| `VNC_PASSWORD` | `clawdbot` | Password for VNC and web authentication |
 
-The entrypoint auto-detects GPU and falls back to `x264enc` with 30fps if no NVIDIA GPU is found.
+## Multi-User Session Behavior
 
-### TURN Server (Required for External Users)
+Guacamole enables **collaborative desktop sessions**:
 
-External users behind restrictive NATs/firewalls need a TURN server to relay WebRTC traffic. Without TURN, the browser shows "No TURN servers found" and connection fails.
+- Multiple users can connect to the same desktop simultaneously
+- All input/output is shared between connected users
+- Actions by one user appear on all screens in real-time
 
-**Important:** The server uses TCP for TURN (UDP is often blocked). Port 80 works best.
+This is different from Selkies which only allows one user at a time. With Guacamole:
+- User A connects → sees desktop
+- User B connects → sees same desktop, can control it too
+- Both see each other's cursor movements and actions
 
-**Option 1: Open Relay (Current Setup)**
-```
-TURN_HOST=openrelay.metered.ca
-TURN_PORT=80
-TURN_USERNAME=openrelayproject
-TURN_PASSWORD=openrelayproject
-```
+## Coolify Deployment (guacamole branch)
 
-**Option 2: Metered.ca (Free Tier)**
-1. Sign up at https://www.metered.ca/stun-turn
-2. Get credentials from dashboard
-3. Set environment variables:
-   ```
-   TURN_HOST=global.relay.metered.ca
-   TURN_PORT=80
-   TURN_USERNAME=your-api-key
-   TURN_PASSWORD=your-api-secret
-   ```
-
-**Option 3: Self-hosted coturn**
-```bash
-# Install on a server with public IP
-apt install coturn
-# Configure /etc/turnserver.conf with realm, user credentials
-# Open ports 80 (TCP) for TURN relay
-```
-
-## Coolify Deployment (selkies branch)
-
-**This section is specific to the `selkies` branch deployment on Coolify.**
+**This section is specific to the `guacamole` branch deployment on Coolify.**
 
 ### Network Architecture
 
-The deployment uses **Cloudflare Tunnel** for HTTPS access, with TURN relay for WebRTC media:
+The deployment uses **Cloudflare Tunnel** for HTTPS access:
 
 ```
 ┌─────────────┐                         ┌─────────────────┐
-│   Browser   │──── WebSocket ─────────▶│ Cloudflare      │──▶ Coolify/Selkies
-│   Client    │    (signalling)         │ Tunnel          │    (port 8080)
+│   Browser   │──── WebSocket ─────────▶│ Cloudflare      │──▶ Coolify/Guacamole
+│   Client    │                         │ Tunnel          │    (port 8080)
 │             │                         │ m2.machinemachine.ai
 └─────────────┘                         └─────────────────┘
-       │
-       │ WebRTC Media (TCP port 80)
-       ▼
-┌─────────────────┐
-│ TURN Server     │◀──── TCP ───────── Server Container
-│ openrelay:80    │    (relay)         (outbound to TURN)
-└─────────────────┘
 ```
 
 **Key Points:**
-- Cloudflare Tunnel proxies HTTP/WebSocket only (signalling)
-- TURN relay traffic bypasses Cloudflare (direct Client ↔ TURN ↔ Server)
-- UDP is blocked from server, so TURN uses TCP on port 80
-- External clients REQUIRE working TURN for WebRTC connectivity
+- Cloudflare Tunnel proxies HTTP/WebSocket (simpler than Selkies)
+- No TURN/STUN servers needed (Guacamole uses WebSocket, not WebRTC)
+- Multi-user works through the same connection
 
 ### Application Details
 
@@ -172,21 +146,20 @@ The deployment uses **Cloudflare Tunnel** for HTTPS access, with TURN relay for 
 |----------|-------|
 | Project | `machine.machine` |
 | Application UUID | `t44s0oww0sc4koko88ocs84w` |
-| Coolify URL Path | `/project/q8w4cwskgwkgg0cg00k00coo/environment/tkgkkwc0w0cso4ooc48848c4/application/t44s0oww0sc4koko88ocs84w` |
 | Container Name Pattern | `clawdbot-desktop-worker-t44s0oww0sc4koko88ocs84w-*` |
-| Desktop Port | 8080 (Selkies WebRTC) |
+| Desktop Port | 8080 (Guacamole HTML5) |
 | Gateway Port | 18789 (Clawdbot WebSocket) |
 | External URL | `https://m2.machinemachine.ai` (via Cloudflare Tunnel) |
 
 ### Deployment Workflow
 
-Commits pushed to the `selkies` branch automatically trigger a rebuild and redeploy on Coolify.
+Commits pushed to the `guacamole` branch trigger a rebuild and redeploy on Coolify.
 
 ```bash
 # Make changes, commit, and push to trigger deployment
 git add <files>
 git commit -m "fix: Description of change"
-git push origin selkies
+git push origin guacamole
 
 # Wait ~2-3 minutes for build and deploy
 # Then check logs to verify
@@ -210,60 +183,34 @@ docker logs -f $(docker ps -q --filter "name=clawdbot-desktop-worker")
 docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") supervisorctl status
 
 # View specific service logs inside container
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/selkies.log
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/xorg.log
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/guacamole.log
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/x11vnc.log
+docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/guacd.log
 docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/xfce4.log
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/clawdbot.log
 
 # Get shell into container
 docker exec -it $(docker ps -q --filter "name=clawdbot-desktop-worker") bash
 ```
 
-### Coolify MCP (When Available)
-
-The Coolify MCP tools can be used when API access is configured:
-
-```
-mcp__coolify__get_application         uuid: t44s0oww0sc4koko88ocs84w
-mcp__coolify__get_application_logs    uuid: t44s0oww0sc4koko88ocs84w
-mcp__coolify__restart_application     uuid: t44s0oww0sc4koko88ocs84w
-```
-
-Note: If MCP returns 403 errors, check the Coolify API token configuration.
-
 ### Common Issues & Fixes
 
 | Issue | Symptom | Fix |
 |-------|---------|-----|
-| Old version deployed | Logs show `vncserver`/`novnc` instead of `selkies` | Push to selkies branch to trigger redeploy |
-| vncserver FATAL | `gave up: vncserver entered FATAL state` | Check if using Selkies (expected) or VNC (outdated) |
-| dbus FATAL | `Failed to bind socket "/var/run/dbus/system_bus_socket"` | Fixed: entrypoint.sh creates `/var/run/dbus` |
-| Selkies GStreamer error | `Namespace Gst not available` | Fixed: supervisord.conf sources `/opt/gstreamer/gst-env` |
-| Container unhealthy | Healthcheck fails with 401 | Fixed: healthcheck accepts 401 (auth enabled) |
-| Xorg won't start | No display available | Check `/var/log/xorg.log` for driver issues |
-| Selkies not connecting | WebSocket errors | Verify Traefik labels and port 8080 exposure |
+| x11vnc crash | `gave up: x11vnc entered FATAL state` | Check Xorg is running first, increase sleep time |
+| guacd not connecting | `Connection refused` on 4822 | Check guacd is running: `supervisorctl status guacd` |
+| Blank screen | Desktop loads but shows nothing | Check XFCE: `supervisorctl restart xfce4` |
+| Auth issues | Can't login with password | Check VNC_PASSWORD env var is set |
+| WebSocket error | Browser console WebSocket errors | Check Traefik WebSocket middleware labels |
 
 ### Port Mapping
 
 The docker-compose.yml uses Traefik labels for routing:
-- Desktop domain → port **8080** (Selkies WebRTC)
+- Desktop domain → port **8080** (Guacamole HTML5)
 - Gateway domain → port **18789** (Clawdbot API)
-
-WebSocket middleware is configured in `docker-compose.yml` Traefik labels for WebRTC signaling.
-
-## Theme System
-
-WhiteSur theme is installed from git during build with fallbacks:
-- GTK Theme: WhiteSur-Dark (fallback: Arc)
-- Icons: WhiteSur (fallback: Papirus)
-- Cursors: McMojave (fallback: DMZ)
-- Wallpaper: Downloaded from WhiteSur-wallpapers repo
-
-Theme settings are applied at runtime in `start-desktop.sh` via `xfconf-query`.
 
 ## Persistent Desktop Settings
 
-Desktop settings (XFCE, Plank dock, autostart apps) persist across container rebuilds and restarts.
+Desktop settings (XFCE, Plank dock, autostart apps) persist across container rebuilds.
 
 ### How It Works
 
@@ -275,19 +222,7 @@ On container startup, `entrypoint.sh` creates symlinks from the normal config lo
 /home/developer/.config/autostart/ → /clawdbot_home/desktop-config/autostart/
 ```
 
-On first run, default configs are copied from the container image to the persistent storage.
-
-### What Persists
-
-| Setting Type | Location | Examples |
-|--------------|----------|----------|
-| XFCE4 | `xfce4/` | Panel layout, theme, keyboard shortcuts, desktop icons |
-| Plank dock | `plank/` | Dock position, pinned apps, icon size |
-| Autostart | `autostart/` | Apps that launch on login |
-
 ### Resetting to Defaults
-
-To reset desktop settings to defaults, delete the persistent config:
 
 ```bash
 CONTAINER=$(docker ps -q --filter "name=clawdbot-desktop-worker")
@@ -295,26 +230,26 @@ CONTAINER=$(docker ps -q --filter "name=clawdbot-desktop-worker")
 # Reset all desktop settings
 docker exec $CONTAINER rm -rf /clawdbot_home/desktop-config
 
-# Or reset specific config
-docker exec $CONTAINER rm -rf /clawdbot_home/desktop-config/xfce4
-
 # Restart container to reinitialize
 docker restart $CONTAINER
 ```
+
+## Theme System
+
+WhiteSur theme is installed from git during build with fallbacks:
+- GTK Theme: WhiteSur-Dark (fallback: Arc)
+- Icons: WhiteSur (fallback: Papirus)
+- Cursors: McMojave (fallback: DMZ)
+- Wallpaper: Downloaded from WhiteSur-wallpapers repo
 
 ## Cargstore (App Store)
 
 Cargstore is an Electron-based app store for installing Flatpak applications. It's bundled into the container at `/opt/cargstore/`.
 
-### Architecture
+### Persistent Storage
 
 ```
-Cargstore (Electron App)
-├── React UI (discover, search, installed, updates)
-├── Flatpak Manager (shell wrapper for flatpak CLI)
-└── Clawdbot Client (WebSocket to Gateway - future)
-
-Persistent Storage (/clawdbot_home/):
+/clawdbot_home/
 ├── desktop-config/             (XFCE, Plank, autostart settings)
 │   ├── xfce4/                  (symlinked from ~/.config/xfce4/)
 │   ├── plank/                  (symlinked from ~/.config/plank/)
@@ -322,70 +257,16 @@ Persistent Storage (/clawdbot_home/):
 └── flatpak/                    (symlinked from ~/.local/share/flatpak/)
 ```
 
-### How Flatpak Persistence Works
+## Comparison: Guacamole vs Selkies
 
-Apps installed via Cargstore persist across container rebuilds:
+| Feature | Guacamole (this branch) | Selkies (selkies branch) |
+|---------|-------------------------|--------------------------|
+| Multi-user | Yes - shared session | No - single user only |
+| Protocol | VNC over WebSocket | WebRTC |
+| Latency | ~50-100ms | ~20ms |
+| Video encoding | CPU (x11vnc) | GPU (NVENC) |
+| TURN servers | Not needed | Required for external users |
+| Complexity | Simpler | More complex |
+| Cloudflare compatible | Yes, easily | Yes, but needs TURN |
 
-1. **Dockerfile** sets `FLATPAK_USER_DIR=/clawdbot_home/flatpak`
-2. **entrypoint.sh** creates symlink: `~/.local/share/flatpak -> /clawdbot_home/flatpak`
-3. **Flathub remote** is added on first run if not present
-4. Apps install to the persistent volume, survive rebuilds
-
-### App Catalog
-
-Cargstore uses a curated catalog at `/opt/cargstore/resources/catalog/apps.json`:
-
-| Field | Description |
-|-------|-------------|
-| `flatpakRef` | Flathub reference (e.g., `flathub:app/org.videolan.VLC/x86_64/stable`) |
-| `bundleUrl` | Direct `.flatpak` bundle URL for non-Flathub apps |
-| `category` | One of: `development`, `creative`, `office`, `ai-ml`, `agents`, `browsers`, `utilities` |
-
-### Running Flatpak Apps
-
-Electron apps in Flatpak require proper D-Bus session:
-
-```bash
-# Inside container - find D-Bus address from XFCE session
-cat /proc/$(pgrep -f xfce4-session)/environ | tr '\0' '\n' | grep DBUS
-# Example output: DBUS_SESSION_BUS_ADDRESS=unix:abstract=/tmp/dbus-xxxxx
-
-# Run app with correct environment
-su - developer -c '
-  export DISPLAY=:0
-  export XDG_RUNTIME_DIR=/tmp/runtime-developer
-  export DBUS_SESSION_BUS_ADDRESS="unix:abstract=/tmp/dbus-xxxxx"
-  flatpak run com.autoclaude.ui
-'
-```
-
-### Debugging Flatpak
-
-```bash
-CONTAINER=$(docker ps -q --filter "name=clawdbot-desktop-worker")
-
-# Check apps visible to developer user
-docker exec $CONTAINER su - developer -c "flatpak list"
-
-# Verify symlink exists
-docker exec $CONTAINER ls -la /home/developer/.local/share/flatpak
-
-# Check persistent storage
-docker exec $CONTAINER ls -la /clawdbot_home/flatpak/app/
-
-# Install app manually
-docker exec $CONTAINER su - developer -c "flatpak install -y --user flathub org.videolan.VLC"
-```
-
-### Common Flatpak Issues
-
-| Issue | Symptom | Fix |
-|-------|---------|-----|
-| App "not installed" | Root sees it, developer doesn't | Check symlink exists: `~/.local/share/flatpak -> /clawdbot_home/flatpak` |
-| D-Bus error | `Failed to connect to session bus` | Set `DBUS_SESSION_BUS_ADDRESS` from xfce4-session |
-| Sandbox error | `Running as root without --no-sandbox` | Run as developer user, not root |
-| Summary size exceeded | `exceeded maximum size of 10485760` | Flatpak version too old (need PPA) |
-
-### Related Repo
-
-The Cargstore source is at `/home/hi/coolify-repos/cargstore` (same level as this repo).
+Choose this branch for **multi-user collaboration**. Choose selkies branch for **lowest latency single-user**.

@@ -1,14 +1,13 @@
 # =============================================================================
-# Clawdbot Desktop Worker - Selkies-GStreamer + XFCE4 + WhiteSur Theme
-# GPU-accelerated remote desktop with macOS-style appearance
+# Clawdbot Desktop Worker - Apache Guacamole + XFCE4 + WhiteSur Theme
+# Multi-user HTML5 remote desktop with macOS-style appearance
 # =============================================================================
 
-# Selkies GStreamer base image (GStreamer + NVENC libraries only)
-FROM ghcr.io/selkies-project/selkies-gstreamer/gstreamer:main-ubuntu20.04
+FROM ubuntu:22.04
 
 # Build args
 ARG DEBIAN_FRONTEND=noninteractive
-ARG SELKIES_VERSION=1.6.0
+ARG GUACAMOLE_VERSION=1.5.5
 
 # Environment
 ENV LANG=en_US.UTF-8 \
@@ -20,17 +19,13 @@ ENV LANG=en_US.UTF-8 \
     HOME=/home/developer \
     DISPLAY=:0 \
     XDG_RUNTIME_DIR=/tmp/runtime-developer \
-    # Selkies configuration
-    SELKIES_ENCODER=nvh264enc \
-    SELKIES_ENABLE_RESIZE=true \
-    SELKIES_FRAMERATE=60 \
-    SELKIES_VIDEO_BITRATE=8000 \
-    SELKIES_ENABLE_BASIC_AUTH=true \
     # Clawdbot paths
     CLAWDBOT_HOME=/clawdbot_home \
     WORKSPACE=/workspace \
     # Flatpak user installation to persistent volume
-    FLATPAK_USER_DIR=/clawdbot_home/flatpak
+    FLATPAK_USER_DIR=/clawdbot_home/flatpak \
+    # Guacamole settings
+    GUACD_LOG_LEVEL=info
 
 # =============================================================================
 # Install Desktop Environment + Dependencies
@@ -41,7 +36,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Core utilities
     sudo ca-certificates curl wget git nano htop software-properties-common \
     # X11 and display
-    xserver-xorg-video-dummy xserver-xorg-core x11-utils x11-xserver-utils xdotool xclip \
+    xserver-xorg-video-dummy xserver-xorg-core x11-utils x11-xserver-utils xdotool xclip xsel \
+    # VNC for X11 sharing
+    x11vnc \
     # XFCE4 Desktop (lightweight)
     xfce4 xfce4-terminal xfce4-taskmanager thunar mousepad \
     # Plank dock (macOS-style)
@@ -52,14 +49,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     arc-theme papirus-icon-theme dmz-cursor-theme \
     # Fonts
     fonts-inter fonts-noto fonts-noto-color-emoji fonts-dejavu-core \
-    # Browser dependencies (Chrome installed separately - Ubuntu's chromium is snap-only)
+    # Browser dependencies (Chrome installed separately)
     fonts-liberation libnss3 libxss1 libasound2 libatk-bridge2.0-0 libgtk-3-0 \
     # Process management & audio
     supervisor dbus dbus-x11 pulseaudio \
     && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install newer Flatpak from PPA (Ubuntu 20.04's version is too old for current Flathub)
+# =============================================================================
+# Install guacd (Guacamole Server) from PPA
+# =============================================================================
+RUN add-apt-repository -y ppa:remmina-ppa-team/remmina-next && \
+    apt-get update && \
+    apt-get install -y guacd libguac-client-vnc && \
+    rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
+# Install newer Flatpak from PPA
+# =============================================================================
 RUN add-apt-repository -y ppa:flatpak/stable && \
     apt-get update && \
     apt-get install -y flatpak && \
@@ -84,27 +91,18 @@ RUN groupadd -g ${GID} ${USER} 2>/dev/null || true && \
     chmod 0440 /etc/sudoers.d/${USER}
 
 # =============================================================================
-# Install Selkies-GStreamer + dependencies + web frontend
-# =============================================================================
-RUN pip3 install --no-cache-dir \
-    "https://github.com/selkies-project/selkies-gstreamer/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
-    websockets \
-    basicauth
-
-# Download and extract Selkies web frontend (required for the UI)
-RUN curl -fsSL "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/selkies-gstreamer-web_v${SELKIES_VERSION}.tar.gz" \
-    | tar -xzf - -C /opt && \
-    # Also install xsel for clipboard support
-    apt-get update && apt-get install -y --no-install-recommends xsel && \
-    rm -rf /var/lib/apt/lists/*
-
-# =============================================================================
-# Install Node.js 22 + Clawdbot
+# Install Node.js 22 + Clawdbot + guacamole-lite
 # =============================================================================
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/* && \
     npm install -g clawdbot@latest
+
+# Install guacamole-lite (lightweight HTML5 client)
+RUN mkdir -p /opt/guacamole-lite && \
+    cd /opt/guacamole-lite && \
+    npm init -y && \
+    npm install guacamole-lite express
 
 # =============================================================================
 # Install Cargstore (App Store)
@@ -189,6 +187,7 @@ COPY config/xorg.conf /etc/X11/xorg.conf
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY scripts/start-desktop.sh /usr/local/bin/start-desktop.sh
+COPY scripts/guacamole-server.js /opt/guacamole-lite/server.js
 
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start-desktop.sh && \
     chown -R ${USER}:${USER} /home/${USER}
@@ -198,11 +197,11 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start-desktop.sh && \
 # =============================================================================
 VOLUME ["${CLAWDBOT_HOME}", "${WORKSPACE}"]
 
-# Selkies WebRTC (8080) + Clawdbot Gateway (18789)
+# Guacamole Web (8080) + Clawdbot Gateway (18789)
 EXPOSE 8080 18789
 
 # =============================================================================
-# Healthcheck - check if selkies port is listening (auth returns 401 which is OK)
+# Healthcheck - check if guacamole-lite is responding
 # =============================================================================
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -qE '^(200|401)$' || exit 1

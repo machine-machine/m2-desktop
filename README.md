@@ -1,14 +1,15 @@
 # clawdbot-desktop
 
-GPU-accelerated remote desktop for Clawdbot, using Selkies-GStreamer WebRTC streaming with NVENC encoding.
+Multi-user HTML5 remote desktop for Clawdbot, using Apache Guacamole for shared session access.
 
 ## Features
 
-- **GPU-Accelerated Streaming** - Uses NVIDIA NVENC for ~20ms latency
-- **WebRTC Protocol** - Modern, low-latency streaming in any browser
+- **Multi-User Sessions** - Multiple users can view and control the same desktop simultaneously
+- **HTML5 Client** - No plugins, works in any modern browser
 - **Pretty XFCE Desktop** - WhiteSur macOS-style theme + Plank dock
 - **Clawdbot Gateway** - Installed and running as a daemon
 - **Audio Support** - PulseAudio streaming included
+- **GPU Acceleration** - For desktop applications (Chrome, etc.)
 
 ## Architecture
 
@@ -19,17 +20,27 @@ GPU-accelerated remote desktop for Clawdbot, using Selkies-GStreamer WebRTC stre
 │  Docker Container (clawdbot-desktop-worker)     │
 │                                                 │
 │  Supervisord (Process Manager)                  │
-│  ├── Xorg (dummy) (:0 display, 1920x1080)        │
+│  ├── Xorg (dummy) (:0 display, 1920x1080)       │
 │  ├── XFCE4 + Plank (Desktop environment)        │
-│  ├── Selkies-GStreamer (WebRTC + NVENC)        │
-│  │   └── Port 8080 (HTTPS)                     │
-│  └── Clawdbot Daemon                           │
-│      └── Port 18789 (WebSocket)                │
+│  ├── x11vnc (shares :0 on port 5900)            │
+│  ├── guacd (protocol daemon, port 4822)         │
+│  ├── Guacamole-Lite (HTML5 client)              │
+│  │   └── Port 8080 (HTTP/WebSocket)             │
+│  └── Clawdbot Daemon                            │
+│      └── Port 18789 (WebSocket)                 │
 │                                                 │
 │  Volumes:                                       │
-│  ├── /clawdbot_home (config & state)           │
-│  └── /workspace (workspace data)               │
+│  ├── /clawdbot_home (config & state)            │
+│  │   ├── desktop-config/ (XFCE, Plank)          │
+│  │   └── flatpak/ (installed apps)              │
+│  └── /workspace (workspace data)                │
 └─────────────────────────────────────────────────┘
+```
+
+### Data Flow
+
+```
+Browser → Guacamole-Lite (8080) → guacd (4822) → x11vnc (5900) → Xorg :0
 ```
 
 ## Quick Start
@@ -52,16 +63,26 @@ docker compose -f docker-compose.local.yml up -d
 
 Access: `http://localhost:8080`
 
+## Multi-User Sessions
+
+Guacamole enables **collaborative desktop sessions**:
+
+- Multiple users can connect to the same desktop simultaneously
+- All input/output is shared between connected users
+- Actions by one user appear on all screens in real-time
+- No special configuration needed - just share the URL
+
+This is ideal for:
+- Pair programming with AI agents
+- Remote assistance and training
+- Collaborative design work
+- Sharing desktop demos
+
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VNC_PASSWORD` | `clawdbot` | Access password (same as before!) |
-| `SELKIES_ENCODER` | `nvh264enc` | Video encoder (`nvh264enc` or `x264enc`) |
-| `SELKIES_FRAMERATE` | `60` | Target framerate |
-| `SELKIES_VIDEO_BITRATE` | `8000` | Bitrate in kbps |
-| `SELKIES_P2P_STUN_HOST` | `stun.l.google.com` | STUN server for WebRTC NAT traversal |
-| `SELKIES_P2P_STUN_PORT` | `19302` | STUN server port |
+| `VNC_PASSWORD` | `clawdbot` | Password for both VNC and web authentication |
 | `ANTHROPIC_API_KEY` | - | For Clawdbot |
 | `OPENAI_API_KEY` | - | For Clawdbot (optional) |
 
@@ -73,7 +94,7 @@ After deploying, configure domains in Coolify UI:
 
 ## GPU Requirements
 
-- NVIDIA GPU with NVENC support (GTX 900+, RTX series)
+- NVIDIA GPU (optional, for desktop apps)
 - NVIDIA Driver 525+ on host
 - NVIDIA Container Toolkit
 
@@ -93,16 +114,17 @@ docker compose exec clawdbot-desktop-worker bash
 
 ### Managing Services
 
-The container uses `supervisor` to manage all internal processes (Xorg, XFCE, Selkies, etc.). You can manage these services using `supervisorctl`.
+The container uses `supervisor` to manage all internal processes:
 
 - **Check status of all services:**
   ```bash
   supervisorctl status
   ```
 
-- **Restart a specific service (e.g., XFCE):**
+- **Restart a specific service:**
   ```bash
   supervisorctl restart xfce4
+  supervisorctl restart guacamole
   ```
 
 ### Persistent Desktop Settings
@@ -128,34 +150,37 @@ docker compose restart
 
 ### Key Configuration Files
 
-The container is configured through several files. Understanding these can help with debugging and customization.
-
-- **/etc/supervisor/conf.d/supervisord.conf**: The main `supervisor` configuration file. Defines all the services that are run on container startup.
-- **/etc/X11/xorg.conf**: Configures the `Xorg` server and the `dummy` video driver, setting the virtual screen resolution.
-- **/usr/local/bin/start-desktop.sh**: This script is executed by `supervisor` to start the XFCE desktop session. It sets environment variables, applies XFCE settings (like enabling compositing), and starts the Plank dock.
-- **~/.config/xfce4/**: This directory contains user-specific XFCE4 settings (symlinked to persistent storage).
+- **/etc/supervisor/conf.d/supervisord.conf**: Defines all services
+- **/etc/X11/xorg.conf**: Xorg configuration
+- **/usr/local/bin/start-desktop.sh**: XFCE session startup
+- **/opt/guacamole-lite/server.js**: Guacamole web server
+- **~/.config/xfce4/**: XFCE4 settings (symlinked to persistent storage)
 
 ### Viewing Logs
 
-Logs for each supervised service are located in `/var/log/`.
+Logs for each supervised service are located in `/var/log/`:
 
-- **Xorg server log**: `/var/log/xorg.log`
-- **Selkies-GStreamer log**: `/var/log/selkies.log`
-- **XFCE session log**: `/var/log/xfce4.log`
-
-You can view them live using `tail`:
 ```bash
-tail -f /var/log/selkies.log
+tail -f /var/log/guacamole.log  # Guacamole-Lite
+tail -f /var/log/x11vnc.log     # x11vnc (VNC server)
+tail -f /var/log/guacd.log      # guacd (protocol daemon)
+tail -f /var/log/xorg.log       # X server
+tail -f /var/log/xfce4.log      # XFCE session
+tail -f /var/log/clawdbot.log   # Clawdbot Gateway
 ```
 
-## Performance Comparison
+## Comparison: Guacamole vs Selkies
 
-| Metric | VNC (old) | Selkies (new) |
-|--------|-----------|---------------|
-| Latency | ~100ms | ~20ms |
-| CPU Usage | 30-50% | <5% |
-| Quality | Blocky | Crisp |
-| Max FPS | 30 | 60 |
+| Feature | Guacamole (this branch) | Selkies (selkies branch) |
+|---------|-------------------------|--------------------------|
+| Multi-user | Yes - shared session | No - single user only |
+| Protocol | VNC over WebSocket | WebRTC |
+| Latency | ~50-100ms | ~20ms |
+| Video encoding | CPU (x11vnc) | GPU (NVENC) |
+| TURN servers | Not needed | Required for external users |
+| Complexity | Simpler | More complex |
+
+Choose Guacamole for **multi-user collaboration**. Choose Selkies for **lowest latency single-user**.
 
 ## License
 

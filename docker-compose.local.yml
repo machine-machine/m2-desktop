@@ -11,14 +11,8 @@ services:
       DISPLAY: ":0"
       XDG_RUNTIME_DIR: "/tmp/runtime-developer"
 
-      # Use software encoding (no GPU)
-      SELKIES_ENCODER: x264enc
-      SELKIES_FRAMERATE: 30
-      SELKIES_VIDEO_BITRATE: 4000
-      SELKIES_ENABLE_RESIZE: "true"
-      SELKIES_ENABLE_BASIC_AUTH: "true"
-      SELKIES_BASIC_AUTH_PASSWORD: ${VNC_PASSWORD:-clawdbot}
-      SELKIES_ENABLE_HTTPS: "false"
+      # Auth
+      VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
 
       # No GPU
       NVIDIA_VISIBLE_DEVICES: ""
@@ -30,7 +24,7 @@ services:
     shm_size: '1gb'
 
     ports:
-      - "8080:8080"   # Selkies WebRTC
+      - "8080:8080"   # Guacamole HTML5
       - "18789:18789" # Clawdbot Gateway
 
     volumes:
