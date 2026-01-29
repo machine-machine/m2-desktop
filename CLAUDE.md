@@ -94,8 +94,43 @@ supervisorctl restart selkies
 | `SELKIES_ENCODER` | `nvh264enc` | Video encoder (`nvh264enc` for GPU, `x264enc` for CPU) |
 | `SELKIES_FRAMERATE` | `60` | Target framerate (30 for CPU encoding) |
 | `SELKIES_VIDEO_BITRATE` | `8000` | Bitrate in kbps |
+| `TURN_HOST` | (none) | TURN server hostname for WebRTC relay |
+| `TURN_PORT` | `3478` | TURN server port |
+| `TURN_USERNAME` | (none) | TURN authentication username |
+| `TURN_PASSWORD` | (none) | TURN authentication password |
 
 The entrypoint auto-detects GPU and falls back to `x264enc` with 30fps if no NVIDIA GPU is found.
+
+### TURN Server (Required for External Users)
+
+External users behind restrictive NATs/firewalls need a TURN server to relay WebRTC traffic. Without TURN, the browser shows "No TURN servers found" and connection fails.
+
+**Option 1: Metered.ca (Free Tier)**
+1. Sign up at https://www.metered.ca/stun-turn
+2. Get credentials from dashboard
+3. Set environment variables:
+   ```
+   TURN_HOST=a]global.relay.metered.ca
+   TURN_PORT=443
+   TURN_USERNAME=your-api-key
+   TURN_PASSWORD=your-api-secret
+   ```
+
+**Option 2: Self-hosted coturn**
+```bash
+# Install on a server with public IP
+apt install coturn
+# Configure /etc/turnserver.conf with realm, user credentials
+# Open ports 3478 (TCP/UDP) and 49152-65535 (UDP)
+```
+
+**Option 3: Open Relay (Testing Only)**
+```
+TURN_HOST=openrelay.metered.ca
+TURN_PORT=443
+TURN_USERNAME=openrelayproject
+TURN_PASSWORD=openrelayproject
+```
 
 ## Coolify Deployment (selkies branch)
 

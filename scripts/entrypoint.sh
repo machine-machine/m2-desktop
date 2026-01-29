@@ -72,18 +72,44 @@ else
 fi
 
 # =============================================================================
-# Configure ICE servers for WebRTC (STUN for NAT traversal)
+# Configure ICE servers for WebRTC (STUN/TURN for NAT traversal)
 # =============================================================================
-# Create RTC config with Google STUN servers for reliable ICE candidate discovery
-# This is critical for WebRTC to work through Docker NAT - without it, only
-# internal Docker IPs are advertised and clients can't connect
-# Remove any stale file first (can be left by previous runs with wrong permissions)
+# STUN helps discover public IPs, but TURN is required for relay when direct
+# P2P connections fail (restrictive firewalls, symmetric NAT, etc.)
+#
+# Environment variables for TURN:
+#   TURN_HOST     - TURN server hostname (e.g., turn.example.com)
+#   TURN_PORT     - TURN server port (default: 3478)
+#   TURN_USERNAME - TURN authentication username
+#   TURN_PASSWORD - TURN authentication password
+#
 rm -f /tmp/rtc.json
-cat > /tmp/rtc.json << 'EOF'
+
+# Build ICE servers JSON
+ICE_SERVERS='{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}'
+
+if [ -n "${TURN_HOST}" ]; then
+    TURN_PORT="${TURN_PORT:-3478}"
+    TURN_URLS="turn:${TURN_HOST}:${TURN_PORT}"
+    TURNS_URLS="turns:${TURN_HOST}:${TURN_PORT}"
+
+    if [ -n "${TURN_USERNAME}" ] && [ -n "${TURN_PASSWORD}" ]; then
+        TURN_SERVER="{\"urls\": [\"${TURN_URLS}\", \"${TURNS_URLS}\"], \"username\": \"${TURN_USERNAME}\", \"credential\": \"${TURN_PASSWORD}\"}"
+    else
+        TURN_SERVER="{\"urls\": [\"${TURN_URLS}\", \"${TURNS_URLS}\"]}"
+    fi
+    ICE_SERVERS="${ICE_SERVERS}, ${TURN_SERVER}"
+    echo "✓ TURN server configured: ${TURN_HOST}:${TURN_PORT}"
+else
+    echo "⚠ No TURN server configured (set TURN_HOST, TURN_USERNAME, TURN_PASSWORD)"
+    echo "  External users behind restrictive NATs may not be able to connect"
+fi
+
+cat > /tmp/rtc.json << EOF
 {
   "lifetimeDuration": "86400s",
   "iceServers": [
-    {"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}
+    ${ICE_SERVERS}
   ],
   "blockStatus": "NOT_BLOCKED",
   "iceTransportPolicy": "all"
@@ -97,7 +123,7 @@ echo "  Encoder: ${SELKIES_ENCODER}"
 echo "  Framerate: ${SELKIES_FRAMERATE:-60} fps"
 echo "  Bitrate: ${SELKIES_VIDEO_BITRATE:-8000} kbps"
 echo "  Resolution: auto (resizable)"
-echo "  ICE: Google STUN servers (stun.l.google.com:19302)"
+echo "  ICE: Google STUN + ${TURN_HOST:-'no TURN (add TURN_HOST env var)'}"
 echo ""
 
 # Start supervisord
