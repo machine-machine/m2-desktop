@@ -42,12 +42,22 @@ else
 fi
 
 # =============================================================================
-# Configure TURN server for WebRTC (use TCP to bypass firewall restrictions)
+# Configure ICE servers for WebRTC (STUN for NAT traversal)
 # =============================================================================
-export SELKIES_TURN_HOST="${SELKIES_TURN_HOST:-staticauth.openrelay.metered.ca}"
-export SELKIES_TURN_PORT="${SELKIES_TURN_PORT:-443}"
-export SELKIES_TURN_PROTOCOL="${SELKIES_TURN_PROTOCOL:-tcp}"
-export SELKIES_TURN_SHARED_SECRET="${SELKIES_TURN_SHARED_SECRET:-openrelayprojectsecret}"
+# Create RTC config with Google STUN servers for reliable ICE candidate discovery
+# This is critical for WebRTC to work through Docker NAT - without it, only
+# internal Docker IPs are advertised and clients can't connect
+cat > /tmp/rtc.json << 'EOF'
+{
+  "lifetimeDuration": "86400s",
+  "iceServers": [
+    {"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}
+  ],
+  "blockStatus": "NOT_BLOCKED",
+  "iceTransportPolicy": "all"
+}
+EOF
+chown developer:developer /tmp/rtc.json
 
 echo ""
 echo "Streaming Configuration:"
@@ -55,7 +65,7 @@ echo "  Encoder: ${SELKIES_ENCODER}"
 echo "  Framerate: ${SELKIES_FRAMERATE:-60} fps"
 echo "  Bitrate: ${SELKIES_VIDEO_BITRATE:-8000} kbps"
 echo "  Resolution: auto (resizable)"
-echo "  TURN: ${SELKIES_TURN_HOST}:${SELKIES_TURN_PORT} (${SELKIES_TURN_PROTOCOL})"
+echo "  ICE: Google STUN servers (stun.l.google.com:19302)"
 echo ""
 
 # Start supervisord
