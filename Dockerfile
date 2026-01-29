@@ -57,12 +57,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
-# Install guacd (Guacamole Server) from PPA
+# Build guacd (Guacamole Server) from source
 # =============================================================================
-RUN add-apt-repository -y ppa:remmina-ppa-team/remmina-next && \
-    apt-get update && \
-    apt-get install -y guacd libguac-client-vnc && \
-    rm -rf /var/lib/apt/lists/*
+ARG GUACAMOLE_VERSION=1.5.5
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build dependencies
+    build-essential autoconf automake libtool pkg-config \
+    # Required libraries for guacd
+    libcairo2-dev libjpeg-turbo8-dev libpng-dev \
+    libossp-uuid-dev libfreerdp-dev libpango1.0-dev \
+    libssh2-1-dev libvncserver-dev libssl-dev \
+    libvorbis-dev libpulse-dev libwebp-dev libwebsockets-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and build guacamole-server
+RUN cd /tmp && \
+    curl -fsSL "https://apache.org/dyn/closer.lua/guacamole/${GUACAMOLE_VERSION}/source/guacamole-server-${GUACAMOLE_VERSION}.tar.gz?action=download" -o guacamole-server.tar.gz && \
+    tar -xzf guacamole-server.tar.gz && \
+    cd guacamole-server-${GUACAMOLE_VERSION} && \
+    autoreconf -fi && \
+    ./configure --with-init-dir=/etc/init.d && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig && \
+    cd / && rm -rf /tmp/guacamole-server*
 
 # =============================================================================
 # Install newer Flatpak from PPA
