@@ -100,16 +100,19 @@ app.get('/api/token', (req, res) => {
         }
     };
 
-    // Encrypt the token (guacamole-lite expects: base64(iv + encrypted))
+    // Encrypt the token (guacamole-lite expects: base64(JSON.stringify({iv, value})))
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(SECRET_KEY, 'hex'), iv);
-    const encrypted = Buffer.concat([
-        cipher.update(JSON.stringify(connectionSettings), 'utf8'),
-        cipher.final()
-    ]);
 
-    // Combine IV + encrypted data, then base64 encode
-    const token = Buffer.concat([iv, encrypted]).toString('base64');
+    let encrypted = cipher.update(JSON.stringify(connectionSettings), 'utf8', 'binary');
+    encrypted += cipher.final('binary');
+
+    // Format expected by guacamole-lite Crypt class
+    const tokenData = {
+        iv: Buffer.from(iv).toString('base64'),
+        value: Buffer.from(encrypted, 'binary').toString('base64')
+    };
+    const token = Buffer.from(JSON.stringify(tokenData)).toString('base64');
     res.json({ token });
 });
 
