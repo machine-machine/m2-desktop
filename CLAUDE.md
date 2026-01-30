@@ -147,11 +147,12 @@ The deployment uses **Cloudflare Tunnel** for HTTPS access:
 | Property | Value |
 |----------|-------|
 | Project | `machine.machine` |
-| Application UUID | `t44s0oww0sc4koko88ocs84w` |
-| Container Name Pattern | `clawdbot-desktop-worker-t44s0oww0sc4koko88ocs84w-*` |
+| Application UUID | `zw4sw440w8k80g0s8cw44kkc` |
+| Container Name Pattern | `clawdbot-desktop-worker-zw4sw440w8k80g0s8cw44kkc-*` |
 | Desktop Port | 8080 (Guacamole HTML5) |
 | Gateway Port | 18789 (Clawdbot WebSocket) |
 | External URL | `https://g1.machinemachine.ai` (via Cloudflare Tunnel) |
+| Coolify URL | `https://cool.machinemachine.ai/project/q8w4cwskgwkgg0cg00k00coo/environment/tkgkkwc0w0cso4ooc48848c4/application/zw4sw440w8k80g0s8cw44kkc` |
 
 ### Deployment Workflow
 
