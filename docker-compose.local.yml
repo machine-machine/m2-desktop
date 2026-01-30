@@ -1,35 +1,39 @@
-# Local development without GPU
+# =============================================================================
+# M2 Desktop - Local Development (Guacamole, no GPU)
+# For testing without NVIDIA GPU
+#
 # Usage: docker compose -f docker-compose.local.yml up -d
+# =============================================================================
 
 services:
-  clawdbot-desktop-worker:
-    build: .
-    container_name: clawdbot-desktop-worker-local
+  m2-desktop-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.guacamole
+    container_name: m2-desktop-worker-local
     restart: unless-stopped
 
     environment:
       DISPLAY: ":0"
       XDG_RUNTIME_DIR: "/tmp/runtime-developer"
-
-      # Auth
-      VNC_PASSWORD: ${VNC_PASSWORD:-clawdbot}
+      M2_HOME: /m2_home
+      M2_VARIANT: guacamole
+      WORKSPACE: /workspace
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VNC_PASSWORD: ${VNC_PASSWORD:-m2desktop}
 
       # No GPU
       NVIDIA_VISIBLE_DEVICES: ""
-
-      CLAWDBOT_HOME: /clawdbot_home
-      WORKSPACE: /workspace
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
     shm_size: '1gb'
 
     ports:
       - "8080:8080"   # Guacamole-Lite HTML5
-      - "18789:18789" # Clawdbot Gateway
+      - "18789:18789" # M2 Gateway
 
     volumes:
-      - clawdbot_home_local:/clawdbot_home
-      - clawdbot_workspace_local:/workspace
+      - m2_home_local:/m2_home
+      - m2_workspace_local:/workspace
 
     healthcheck:
       test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health | grep -q '200'"]
@@ -39,7 +43,7 @@ services:
       start_period: 60s
 
   # =============================================================================
-  # Full Apache Guacamole Stack (alternative to guacamole-lite)
+  # Full Apache Guacamole Stack (optional)
   # Access via localhost:8888/guacamole
   # Default login: guacadmin / guacadmin
   # =============================================================================
@@ -70,24 +74,20 @@ services:
     depends_on:
       guacamole-db:
         condition: service_healthy
-      clawdbot-desktop-worker:
+      m2-desktop-worker:
         condition: service_healthy
     environment:
-      # Connect to guacd running inside the worker container
-      GUACD_HOSTNAME: clawdbot-desktop-worker-local
+      GUACD_HOSTNAME: m2-desktop-worker-local
       GUACD_PORT: 4822
-
-      # Database connection
       MYSQL_HOSTNAME: guacamole-db-local
       MYSQL_PORT: 3306
       MYSQL_DATABASE: guacamole_db
       MYSQL_USER: guacamole_user
       MYSQL_PASSWORD: ${GUAC_DB_PASSWORD:-guacamole_pass}
-
     ports:
       - "8888:8080"   # Full Guacamole UI
 
 volumes:
-  clawdbot_home_local:
-  clawdbot_workspace_local:
+  m2_home_local:
+  m2_workspace_local:
   guacamole_db_local:

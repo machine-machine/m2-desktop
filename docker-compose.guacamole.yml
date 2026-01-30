@@ -1,10 +1,13 @@
 # =============================================================================
-# M2 Desktop - Default Configuration (Guacamole)
+# M2 Desktop - Guacamole Variant (with Full Guacamole Stack)
 # Multi-user HTML5 remote desktop via Apache Guacamole protocol
 #
-# For other variants, use:
-#   docker compose -f docker-compose.novnc.yml up -d
-#   docker compose -f docker-compose.selkies.yml up -d
+# Usage: docker compose -f docker-compose.guacamole.yml up -d
+#
+# Includes:
+#   - m2-desktop-worker: Core desktop with guacamole-lite (port 8080)
+#   - guacamole-db: MariaDB for Full Guacamole
+#   - guacamole-full: Official Apache Guacamole (port 8888)
 # =============================================================================
 
 services:
@@ -16,35 +19,31 @@ services:
     restart: unless-stopped
 
     environment:
-      # M2 Configuration
       M2_HOME: /m2_home
       M2_VARIANT: guacamole
       WORKSPACE: /workspace
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-
-      # Auth (VNC_PASSWORD for both x11vnc and Guacamole web auth)
       VNC_PASSWORD: ${VNC_PASSWORD:-m2desktop}
-
-      # GPU (for desktop apps that use GPU acceleration)
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
 
     deploy:
       resources:
         limits:
-          cpus: "42"  # 66% of 64 cores
+          cpus: "42"
         reservations:
           devices:
             - driver: nvidia
               count: all
               capabilities: ["gpu", "compute", "utility", "video"]
 
-    # Required for Chrome shared memory
     shm_size: '2gb'
-
-    # Required for Flatpak apps (bubblewrap needs user namespaces)
     privileged: true
+
+    ports:
+      - "8080:8080"   # Guacamole-Lite HTML5
+      - "18789:18789" # M2 Gateway
 
     volumes:
       - m2_home:/m2_home
@@ -56,20 +55,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-
-    labels:
-      - traefik.enable=true
-      # Route to Guacamole-Lite on port 8080
-      - traefik.http.services.m2-desktop-worker.loadbalancer.server.port=8080
-      # HTTP router (Cloudflare handles HTTPS)
-      - traefik.http.routers.m2-desktop.rule=Host(`g1.machinemachine.ai`)
-      - traefik.http.routers.m2-desktop.entrypoints=http
-      - traefik.http.routers.m2-desktop.service=m2-desktop-worker
-
-  # =============================================================================
-  # Full Apache Guacamole Stack (optional - for enterprise features)
-  # Access via g2.machinemachine.ai or localhost:8888
-  # =============================================================================
 
   guacamole-db:
     image: mariadb:10.11
@@ -100,25 +85,15 @@ services:
       m2-desktop-worker:
         condition: service_healthy
     environment:
-      # Connect to guacd running inside the worker container
       GUACD_HOSTNAME: m2-desktop-worker
       GUACD_PORT: 4822
-
-      # Database connection
       MYSQL_HOSTNAME: guacamole-db
       MYSQL_PORT: 3306
       MYSQL_DATABASE: guacamole_db
       MYSQL_USER: guacamole_user
       MYSQL_PASSWORD: ${GUAC_DB_PASSWORD:-guacamole_pass}
-
-    labels:
-      - traefik.enable=true
-      # Route to Guacamole Full on port 8888 (internally 8080)
-      - traefik.http.services.guacamole-full.loadbalancer.server.port=8080
-      # HTTP router for full Guacamole
-      - traefik.http.routers.guacamole-full.rule=Host(`g2.machinemachine.ai`)
-      - traefik.http.routers.guacamole-full.entrypoints=http
-      - traefik.http.routers.guacamole-full.service=guacamole-full
+    ports:
+      - "8888:8080"   # Full Guacamole UI
 
 volumes:
   m2_home:

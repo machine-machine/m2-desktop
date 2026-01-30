@@ -1,30 +1,41 @@
 #!/bin/bash
+# =============================================================================
+# M2 Desktop - Unified Entrypoint
+# Handles initialization for all variants (noVNC, Guacamole, Selkies)
+# =============================================================================
 set -e
 
+M2_VARIANT="${M2_VARIANT:-guacamole}"
+M2_HOME="${M2_HOME:-/m2_home}"
+WORKSPACE="${WORKSPACE:-/workspace}"
+
 echo "=============================================="
-echo " Clawdbot Desktop Worker - Apache Guacamole"
+echo " M2 Desktop Worker - ${M2_VARIANT} variant"
 echo "=============================================="
+
+# =============================================================================
+# Common Initialization
+# =============================================================================
 
 # Create runtime directories
 mkdir -p /tmp/runtime-developer
 chmod 700 /tmp/runtime-developer
 chown developer:developer /tmp/runtime-developer
 
-# Create D-Bus socket directory (required for dbus-daemon)
+# Create D-Bus socket directory
 mkdir -p /var/run/dbus
 chown messagebus:messagebus /var/run/dbus 2>/dev/null || chown root:root /var/run/dbus
 
 # Ensure volumes are owned by developer
-chown -R developer:developer ${CLAWDBOT_HOME} ${WORKSPACE} 2>/dev/null || true
+chown -R developer:developer ${M2_HOME} ${WORKSPACE} 2>/dev/null || true
 
 # =============================================================================
-# Initialize persistent desktop config (survives container rebuilds)
+# Persistent Desktop Config (survives container rebuilds)
 # =============================================================================
-DESKTOP_CONFIG="${CLAWDBOT_HOME}/desktop-config"
+DESKTOP_CONFIG="${M2_HOME}/desktop-config"
 mkdir -p "${DESKTOP_CONFIG}"
 
 # List of config directories to persist
-# Format: "source_in_container:name_in_persistent_storage"
 PERSIST_CONFIGS=(
     "/home/developer/.config/xfce4:xfce4"
     "/home/developer/.config/plank:plank"
@@ -58,14 +69,13 @@ chown -R developer:developer "${DESKTOP_CONFIG}"
 echo "Desktop settings persistent at ${DESKTOP_CONFIG}"
 
 # =============================================================================
-# Initialize Flatpak user directory (persistent storage for apps)
+# Persistent Flatpak Directory
 # =============================================================================
-export FLATPAK_USER_DIR="${CLAWDBOT_HOME}/flatpak"
+export FLATPAK_USER_DIR="${M2_HOME}/flatpak"
 mkdir -p "${FLATPAK_USER_DIR}"
 chown -R developer:developer "${FLATPAK_USER_DIR}"
 
-# Symlink developer's flatpak dir to persistent volume (for XFCE session)
-# This ensures apps installed via Cargstore persist across container rebuilds
+# Symlink developer's flatpak dir to persistent volume
 mkdir -p /home/developer/.local/share
 rm -rf /home/developer/.local/share/flatpak
 ln -sf "${FLATPAK_USER_DIR}" /home/developer/.local/share/flatpak
@@ -88,35 +98,103 @@ EOF
 chown -R developer:developer /home/developer/.config/mimeapps.list
 
 # =============================================================================
-# Configure VNC password for x11vnc
+# Variant-Specific Configuration
 # =============================================================================
-VNC_PASSWORD="${VNC_PASSWORD:-clawdbot}"
-mkdir -p /tmp
-x11vnc -storepasswd "${VNC_PASSWORD}" /tmp/.vnc_passwd
-chmod 644 /tmp/.vnc_passwd
+VNC_PASSWORD="${VNC_PASSWORD:-m2desktop}"
 
-echo ""
-echo "Authentication:"
-echo "  Username: developer"
-echo "  Password: [set from VNC_PASSWORD]"
-echo ""
+case "${M2_VARIANT}" in
+    novnc)
+        echo ""
+        echo "Variant: noVNC (TigerVNC + websockify)"
+        echo "=========================================="
+
+        # Create VNC password for TigerVNC
+        mkdir -p /home/developer/.vnc
+        echo "${VNC_PASSWORD}" | vncpasswd -f > /home/developer/.vnc/passwd
+        chmod 600 /home/developer/.vnc/passwd
+        chown -R developer:developer /home/developer/.vnc
+
+        echo "Authentication:"
+        echo "  Username: developer"
+        echo "  Password: [set from VNC_PASSWORD]"
+        echo ""
+        echo "Access:"
+        echo "  noVNC: http://localhost:6080/vnc.html"
+        echo "  M2 Gateway: ws://localhost:18789"
+        echo ""
+        ;;
+
+    guacamole)
+        echo ""
+        echo "Variant: Guacamole (x11vnc + guacd + guacamole-lite)"
+        echo "====================================================="
+
+        # Create VNC password for x11vnc
+        mkdir -p /tmp
+        x11vnc -storepasswd "${VNC_PASSWORD}" /tmp/.vnc_passwd
+        chmod 644 /tmp/.vnc_passwd
+
+        # Export for guacamole-lite
+        export GUAC_AUTH_ENABLED="${GUAC_AUTH_ENABLED:-true}"
+        export GUAC_AUTH_USER="${GUAC_AUTH_USER:-developer}"
+        export GUAC_AUTH_PASSWORD="${GUAC_AUTH_PASSWORD:-${VNC_PASSWORD}}"
+
+        echo "Authentication:"
+        echo "  Username: ${GUAC_AUTH_USER}"
+        echo "  Password: [set from VNC_PASSWORD]"
+        echo ""
+        echo "Architecture:"
+        echo "  Browser -> Guacamole-Lite (8080) -> guacd (4822) -> x11vnc (5900) -> Xorg :0"
+        echo ""
+        echo "Access:"
+        echo "  Web: http://localhost:8080"
+        echo "  M2 Gateway: ws://localhost:18789"
+        echo ""
+        echo "Multi-user: enabled (all users share same session)"
+        echo ""
+        ;;
+
+    selkies)
+        echo ""
+        echo "Variant: Selkies-GStreamer (WebRTC)"
+        echo "===================================="
+
+        # GPU detection
+        if nvidia-smi &>/dev/null; then
+            export SELKIES_ENCODER="${SELKIES_ENCODER:-nvh264enc}"
+            echo "GPU: NVIDIA detected, using hardware encoding (${SELKIES_ENCODER})"
+        else
+            export SELKIES_ENCODER="${SELKIES_ENCODER:-x264enc}"
+            echo "GPU: None detected, using software encoding (${SELKIES_ENCODER})"
+        fi
+
+        export SELKIES_ENABLE_BASIC_AUTH="${SELKIES_ENABLE_BASIC_AUTH:-true}"
+
+        echo ""
+        echo "Authentication:"
+        echo "  Username: developer (if basic auth enabled)"
+        echo "  Password: [set from VNC_PASSWORD]"
+        echo ""
+        echo "Architecture:"
+        echo "  Browser <-> Selkies-GStreamer (8080) <-> WebRTC <-> Xorg :0"
+        echo ""
+        echo "Access:"
+        echo "  Web: http://localhost:8080"
+        echo "  M2 Gateway: ws://localhost:18789"
+        echo ""
+        echo "NOTE: Single-user only (WebRTC is 1:1)"
+        echo ""
+        ;;
+
+    *)
+        echo "ERROR: Unknown M2_VARIANT: ${M2_VARIANT}"
+        echo "Valid variants: novnc, guacamole, selkies"
+        exit 1
+        ;;
+esac
 
 # =============================================================================
-# Configure Guacamole environment
+# Start Supervisord
 # =============================================================================
-export GUAC_AUTH_ENABLED="${GUAC_AUTH_ENABLED:-true}"
-export GUAC_AUTH_USER="${GUAC_AUTH_USER:-developer}"
-export GUAC_AUTH_PASSWORD="${GUAC_AUTH_PASSWORD:-${VNC_PASSWORD}}"
-
-echo "Remote Desktop Configuration (Guacamole):"
-echo "  Web interface: port 8080"
-echo "  Multi-user: enabled (all users share same session)"
-echo "  VNC backend: x11vnc on port 5900"
-echo "  Protocol: guacd on port 4822"
-echo ""
-echo "Architecture:"
-echo "  Browser -> Guacamole-Lite (8080) -> guacd (4822) -> x11vnc (5900) -> Xorg :0"
-echo ""
-
-# Start supervisord
+echo "Starting services via supervisord..."
 exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf

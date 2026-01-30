@@ -1,0 +1,70 @@
+# =============================================================================
+# M2 Desktop - Selkies Variant
+# Selkies-GStreamer WebRTC for low-latency remote desktop
+#
+# Usage: docker compose -f docker-compose.selkies.yml up -d
+#
+# Best for: Lowest latency single-user experience, requires GPU for best results
+# Note: WebRTC requires TURN servers for external access through firewalls
+# =============================================================================
+
+services:
+  m2-desktop-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.selkies
+    container_name: m2-desktop-worker
+    restart: unless-stopped
+    privileged: true
+    shm_size: '2gb'
+
+    environment:
+      M2_HOME: /m2_home
+      M2_VARIANT: selkies
+      WORKSPACE: /workspace
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VNC_PASSWORD: ${VNC_PASSWORD:-m2desktop}
+
+      # Selkies WebRTC settings
+      SELKIES_ENCODER: ${SELKIES_ENCODER:-nvh264enc}
+      SELKIES_ENABLE_BASIC_AUTH: ${SELKIES_ENABLE_BASIC_AUTH:-true}
+
+      # TURN server for NAT traversal (required for external access)
+      TURN_HOST: ${TURN_HOST:-}
+      TURN_PORT: ${TURN_PORT:-3478}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_PASSWORD: ${TURN_PASSWORD:-}
+
+      # NVIDIA GPU
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+
+    deploy:
+      resources:
+        limits:
+          cpus: "42"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu", "compute", "utility", "video"]
+
+    ports:
+      - "8080:8080"   # Selkies WebRTC
+      - "18789:18789" # M2 Gateway
+
+    volumes:
+      - m2_home:/m2_home
+      - m2_workspace:/workspace
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8080/ | grep -qi 'selkies'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  m2_home:
+  m2_workspace:

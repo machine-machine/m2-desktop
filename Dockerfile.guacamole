@@ -1,0 +1,142 @@
+# =============================================================================
+# M2 Desktop - Guacamole Variant (DEFAULT)
+# Multi-user HTML5 remote desktop via Apache Guacamole protocol
+#
+# Architecture:
+#   Browser -> Guacamole-Lite (8080) -> guacd (4822) -> x11vnc (5900) -> Xorg :0
+# =============================================================================
+
+FROM ubuntu:22.04
+
+# Build args
+ARG DEBIAN_FRONTEND=noninteractive
+ARG GUACAMOLE_VERSION=1.5.5
+ARG CARGSTORE_VERSION=0.2.1
+
+# Environment
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    TZ=UTC \
+    USER=developer \
+    UID=1000 \
+    GID=1000 \
+    HOME=/home/developer \
+    DISPLAY=:0 \
+    XDG_RUNTIME_DIR=/tmp/runtime-developer \
+    # M2 paths (renamed from clawdbot)
+    M2_HOME=/m2_home \
+    M2_VARIANT=guacamole \
+    WORKSPACE=/workspace \
+    # Flatpak user installation to persistent volume
+    FLATPAK_USER_DIR=/m2_home/flatpak \
+    # Guacamole settings
+    GUACD_LOG_LEVEL=info
+
+# =============================================================================
+# Shared Setup Scripts
+# =============================================================================
+COPY scripts/docker/*.sh /tmp/docker/
+RUN chmod +x /tmp/docker/*.sh
+
+# Install base packages
+RUN /tmp/docker/base-packages.sh
+
+# =============================================================================
+# Guacamole-Specific: Build guacd from source
+# =============================================================================
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+    # Build dependencies
+    build-essential autoconf automake libtool pkg-config \
+    # Required libraries for guacd
+    libcairo2-dev libjpeg-turbo8-dev libpng-dev \
+    uuid-dev freerdp2-dev libpango1.0-dev \
+    libssh2-1-dev libvncserver-dev libssl-dev \
+    libvorbis-dev libpulse-dev libwebp-dev libwebsockets-dev \
+    # x11vnc for VNC server
+    x11vnc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and build guacamole-server
+RUN cd /tmp && \
+    curl -fsSL "https://apache.org/dyn/closer.lua/guacamole/${GUACAMOLE_VERSION}/source/guacamole-server-${GUACAMOLE_VERSION}.tar.gz?action=download" -o guacamole-server.tar.gz && \
+    tar -xzf guacamole-server.tar.gz && \
+    cd guacamole-server-${GUACAMOLE_VERSION} && \
+    autoreconf -fi && \
+    ./configure --with-init-dir=/etc/init.d && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig && \
+    cd / && rm -rf /tmp/guacamole-server*
+
+# =============================================================================
+# Create User
+# =============================================================================
+RUN /tmp/docker/setup-user.sh
+
+# =============================================================================
+# Install Flatpak + Chrome + Cargstore
+# =============================================================================
+ENV CARGSTORE_VERSION=${CARGSTORE_VERSION}
+RUN /tmp/docker/setup-flatpak.sh
+
+# =============================================================================
+# Install Node.js + M2 Gateway
+# =============================================================================
+RUN /tmp/docker/setup-node.sh
+
+# Install guacamole-lite (lightweight HTML5 client)
+RUN mkdir -p /opt/guacamole-lite && \
+    cd /opt/guacamole-lite && \
+    npm init -y && \
+    npm install guacamole-lite express
+
+# =============================================================================
+# Install WhiteSur Theme
+# =============================================================================
+RUN /tmp/docker/setup-desktop.sh
+
+# =============================================================================
+# Create Directories
+# =============================================================================
+RUN mkdir -p ${M2_HOME} ${WORKSPACE} ${XDG_RUNTIME_DIR} && \
+    chown -R ${USER}:${USER} ${M2_HOME} ${WORKSPACE} ${XDG_RUNTIME_DIR}
+
+# =============================================================================
+# Copy Configuration Files
+# =============================================================================
+COPY --chown=${USER}:${USER} config/xfce4/ /home/${USER}/.config/xfce4/
+COPY --chown=${USER}:${USER} config/plank/ /home/${USER}/.config/plank/
+COPY --chown=${USER}:${USER} config/desktop/ /home/${USER}/Desktop/
+COPY --chown=${USER}:${USER} config/autostart/ /home/${USER}/.config/autostart/
+COPY config/xorg.conf /etc/X11/xorg.conf
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY scripts/supervisord/guacamole.conf /etc/supervisor/conf.d/supervisord.conf
+COPY scripts/start-desktop.sh /usr/local/bin/start-desktop.sh
+COPY scripts/guacamole-server.js /opt/guacamole-lite/server.js
+COPY scripts/static/ /opt/guacamole-lite/static/
+
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start-desktop.sh && \
+    chown -R ${USER}:${USER} /home/${USER}
+
+# Cleanup
+RUN rm -rf /tmp/docker
+
+# =============================================================================
+# Volumes & Ports
+# =============================================================================
+VOLUME ["${M2_HOME}", "${WORKSPACE}"]
+
+# Guacamole Web (8080) + M2 Gateway (18789)
+EXPOSE 8080 18789
+
+# =============================================================================
+# Healthcheck
+# =============================================================================
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -qE '^(200|401)$' || exit 1
+
+# =============================================================================
+# Entrypoint
+# =============================================================================
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

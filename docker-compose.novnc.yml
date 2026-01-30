@@ -1,0 +1,58 @@
+# =============================================================================
+# M2 Desktop - noVNC Variant
+# TigerVNC + noVNC for HTML5 remote desktop with GPU support
+#
+# Usage: docker compose -f docker-compose.novnc.yml up -d
+#
+# Best for: Single-user with GPU apps, simpler setup
+# =============================================================================
+
+services:
+  m2-desktop-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.novnc
+    container_name: m2-desktop-worker
+    restart: unless-stopped
+
+    environment:
+      M2_HOME: /m2_home
+      M2_VARIANT: novnc
+      WORKSPACE: /workspace
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VNC_PASSWORD: ${VNC_PASSWORD:-m2desktop}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: all
+
+    deploy:
+      resources:
+        limits:
+          cpus: "42"
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu", "compute", "utility", "video"]
+
+    shm_size: '2gb'
+    privileged: true
+
+    ports:
+      - "6080:6080"   # noVNC HTML5
+      - "18789:18789" # M2 Gateway
+
+    volumes:
+      - m2_home:/m2_home
+      - m2_workspace:/workspace
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:6080/ | grep -q 'noVNC'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  m2_home:
+  m2_workspace:

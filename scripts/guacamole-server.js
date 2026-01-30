@@ -20,7 +20,7 @@ const GUACD_HOST = process.env.GUACD_HOST || '127.0.0.1';
 const GUACD_PORT = parseInt(process.env.GUACD_PORT || '4822', 10);
 const VNC_HOST = process.env.VNC_HOST || '127.0.0.1';
 const VNC_PORT = parseInt(process.env.VNC_PORT || '5900', 10);
-const VNC_PASSWORD = process.env.VNC_PASSWORD || 'clawdbot';
+const VNC_PASSWORD = process.env.VNC_PASSWORD || 'm2desktop';
 const AUTH_ENABLED = process.env.GUAC_AUTH_ENABLED !== 'false';
 const AUTH_USER = process.env.GUAC_AUTH_USER || 'developer';
 const AUTH_PASSWORD = process.env.GUAC_AUTH_PASSWORD || VNC_PASSWORD;
@@ -49,7 +49,7 @@ function basicAuth(req, res, next) {
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Basic ')) {
-        res.setHeader('WWW-Authenticate', 'Basic realm="Clawdbot Desktop"');
+        res.setHeader('WWW-Authenticate', 'Basic realm="M2 Desktop"');
         return res.status(401).send('Authentication required');
     }
 
@@ -123,7 +123,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Clawdbot Desktop</title>
+    <title>M2 Desktop</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -202,7 +202,7 @@ app.get('/', (req, res) => {
 </head>
 <body>
     <div id="loading">
-        <h1>Clawdbot Desktop</h1>
+        <h1>M2 Desktop</h1>
         <div class="spinner"></div>
         <p>Connecting to desktop...</p>
     </div>

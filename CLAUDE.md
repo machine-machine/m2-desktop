@@ -4,237 +4,223 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`clawdbot-desktop` is a multi-user HTML5 remote desktop that runs Clawdbot Gateway and exposes a web-based desktop session via Apache Guacamole. It provides a persistent "AI worker PC" with a full Linux desktop inside a container, remotely accessible from any browser with **multi-user session sharing** - multiple users can view and control the same desktop simultaneously.
+`m2-desktop` (formerly clawdbot-desktop) is a multi-variant HTML5 remote desktop system with three deployment options:
+
+| Variant | Technology | Multi-user | Best For |
+|---------|------------|------------|----------|
+| **Guacamole** (default) | x11vnc + guacd + guacamole-lite | Yes | Collaboration |
+| **noVNC** | TigerVNC + websockify | No | Simple setup |
+| **Selkies** | WebRTC + GStreamer | No | Low latency |
+
+All variants include:
+- XFCE4 desktop with WhiteSur macOS-style theme
+- Plank dock
+- M2 Gateway AI agent interface
+- Persistent desktop settings
 
 ## Architecture
 
+### Directory Structure
+
 ```
-┌─────────────────────────────────────────────────┐
-│  Coolify (Deployment & Reverse Proxy)           │
-├─────────────────────────────────────────────────┤
-│  Docker Container (clawdbot-desktop-worker)     │
-│                                                 │
-│  Supervisord (Process Manager)                  │
-│  ├── D-Bus (priority 5)                         │
-│  ├── PulseAudio (priority 10)                   │
-│  ├── Xorg + dummy driver (priority 15)          │
-│  ├── XFCE4 + Plank dock (priority 20)           │
-│  ├── x11vnc (priority 25)                       │
-│  │   └── Port 5900 (VNC, localhost only)        │
-│  ├── guacd (priority 28)                        │
-│  │   └── Port 4822 (Guacamole protocol)         │
-│  ├── Guacamole-Lite (priority 30)               │
-│  │   └── Port 8080 (HTML5 web client)           │
-│  └── Clawdbot Gateway (priority 40)             │
-│      └── Port 18789 (WebSocket)                 │
-│                                                 │
-│  Volumes:                                       │
-│  ├── /clawdbot_home (config & state)            │
-│  │   ├── desktop-config/ (XFCE, Plank)          │
-│  │   └── flatpak/ (installed apps)              │
-│  └── /workspace (workspace data)                │
-└─────────────────────────────────────────────────┘
+m2-desktop/
+├── Dockerfile.guacamole          # Default - multi-user (Apache Guacamole protocol)
+├── Dockerfile.novnc              # TigerVNC + noVNC
+├── Dockerfile.selkies            # Selkies-GStreamer WebRTC
+├── docker-compose.yml            # Default → guacamole with Full Guacamole services
+├── docker-compose.guacamole.yml  # Guacamole with Full Guacamole + ports
+├── docker-compose.novnc.yml      # noVNC variant
+├── docker-compose.selkies.yml    # Selkies variant
+├── docker-compose.local.yml      # Local dev (guacamole, no GPU)
+├── scripts/
+│   ├── docker/                   # Shared build scripts
+│   │   ├── base-packages.sh      # Core apt packages
+│   │   ├── setup-desktop.sh      # XFCE + WhiteSur theme
+│   │   ├── setup-user.sh         # developer user creation
+│   │   ├── setup-node.sh         # Node.js 22 + M2 Gateway
+│   │   └── setup-flatpak.sh      # Flatpak + Cargstore
+│   ├── supervisord/              # Variant-specific supervisord configs
+│   │   ├── guacamole.conf        # x11vnc + guacd + guacamole-lite
+│   │   ├── novnc.conf            # TigerVNC + websockify
+│   │   └── selkies.conf          # Selkies-GStreamer
+│   ├── entrypoint.sh             # Unified, variant-aware
+│   ├── start-desktop.sh          # XFCE session startup
+│   └── guacamole-server.js       # Guacamole-lite WebSocket server
+├── config/
+│   ├── xorg.conf                 # Xorg dummy driver config
+│   ├── xfce4/                    # XFCE settings
+│   ├── plank/                    # Dock configuration
+│   ├── autostart/                # Desktop autostart
+│   ├── desktop/                  # Desktop icons
+│   └── guacamole/
+│       └── initdb.sql            # Full Guacamole DB schema
+└── CLAUDE.md                     # This file
 ```
 
-### Data Flow
+### Data Flow by Variant
 
+**Guacamole:**
 ```
 Browser → Guacamole-Lite (8080) → guacd (4822) → x11vnc (5900) → Xorg :0
-        WebSocket              Guacamole protocol   VNC protocol   X11
 ```
 
-**Key Components:**
-- Base Image: Ubuntu 22.04
-- Remote Desktop: **guacamole-lite** (Node.js) + guacd (C daemon)
-- VNC Server: x11vnc (shares existing X11 display)
-- Desktop: XFCE4 with WhiteSur macOS-style theme + Plank dock
-- Display: Xorg with dummy driver at 1920x1080
-- Process Manager: Supervisord
-- AI Agent: Clawdbot Gateway (Node.js 22.x)
+**noVNC:**
+```
+Browser → noVNC/websockify (6080) → TigerVNC (5901) → X :1
+```
 
-**Note:** This uses **guacamole-lite** (a lightweight Node.js WebSocket server), NOT the full Apache Guacamole (Tomcat/Java). The WebSocket endpoint is `/websocket`, not `/guacamole/websocket-tunnel`.
+**Selkies:**
+```
+Browser ←→ Selkies-GStreamer (8080) ←→ WebRTC ←→ Xorg :0
+```
 
 ## Build and Run
 
 ```bash
-# Local development (no GPU, software encoding)
-docker compose -f docker-compose.local.yml up -d
-# Access Guacamole-Lite: http://localhost:8080
-# Access Full Guacamole: http://localhost:8888/guacamole (login: guacadmin/guacadmin)
-
-# Production (with GPU for desktop apps)
+# Default (Guacamole variant)
 docker compose up -d
+# Access: http://localhost:8080
+
+# noVNC variant
+docker compose -f docker-compose.novnc.yml up -d
+# Access: http://localhost:6080/vnc.html
+
+# Selkies variant (requires GPU)
+docker compose -f docker-compose.selkies.yml up -d
+# Access: http://localhost:8080
+
+# Local development (no GPU)
+docker compose -f docker-compose.local.yml up -d
 
 # Rebuild after changes
 docker compose build --no-cache
 
-# Get a shell inside the container
-docker compose exec clawdbot-desktop-worker bash
+# Shell into container
+docker compose exec m2-desktop-worker bash
 ```
 
 ## Debugging
 
 ```bash
 # Check service status
-supervisorctl status
+docker compose exec m2-desktop-worker supervisorctl status
 
 # View logs
-tail -f /var/log/guacamole.log  # Guacamole-Lite
-tail -f /var/log/x11vnc.log     # x11vnc VNC server
-tail -f /var/log/guacd.log      # guacd protocol daemon
-tail -f /var/log/xorg.log       # X server
-tail -f /var/log/xfce4.log      # XFCE session
-tail -f /var/log/clawdbot.log   # Clawdbot Gateway
+docker compose exec m2-desktop-worker tail -f /var/log/guacamole.log  # Guacamole-Lite
+docker compose exec m2-desktop-worker tail -f /var/log/x11vnc.log     # x11vnc
+docker compose exec m2-desktop-worker tail -f /var/log/guacd.log      # guacd
+docker compose exec m2-desktop-worker tail -f /var/log/xorg.log       # Xorg
+docker compose exec m2-desktop-worker tail -f /var/log/xfce4.log      # XFCE
+docker compose exec m2-desktop-worker tail -f /var/log/m2-gateway.log # M2 Gateway
+docker compose exec m2-desktop-worker tail -f /var/log/novnc.log      # noVNC (novnc variant)
+docker compose exec m2-desktop-worker tail -f /var/log/selkies.log    # Selkies (selkies variant)
 
 # Restart a specific service
-supervisorctl restart xfce4
-supervisorctl restart guacamole
+docker compose exec m2-desktop-worker supervisorctl restart xfce4
+docker compose exec m2-desktop-worker supervisorctl restart guacamole
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `scripts/supervisord.conf` | Process definitions and startup order |
-| `scripts/entrypoint.sh` | VNC password setup, starts supervisord |
-| `scripts/start-desktop.sh` | XFCE session startup, theme config, Plank launch |
+| `scripts/entrypoint.sh` | Unified entrypoint, detects M2_VARIANT |
+| `scripts/supervisord/*.conf` | Variant-specific service definitions |
+| `scripts/docker/*.sh` | Shared Docker build scripts |
+| `scripts/start-desktop.sh` | XFCE session startup, theme config |
 | `scripts/guacamole-server.js` | Guacamole-Lite WebSocket server |
-| `config/xorg.conf` | Xorg dummy driver config (1920x1080 resolution) |
-| `config/xfce4/` | XFCE panel, theme, and window manager settings |
-| `config/plank/` | Plank dock configuration and launcher items |
+| `config/xorg.conf` | Xorg dummy driver (1920x1080, virtual 4096x4096) |
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VNC_PASSWORD` | `clawdbot` | Password for VNC and web authentication |
+| `VNC_PASSWORD` | `m2desktop` | Password for VNC and web auth |
+| `M2_VARIANT` | `guacamole` | Variant (guacamole/novnc/selkies) |
+| `M2_HOME` | `/m2_home` | Persistent storage path |
+| `WORKSPACE` | `/workspace` | Workspace data path |
+| `SELKIES_ENCODER` | `nvh264enc` | Selkies encoder (auto-detected) |
 
-## Multi-User Session Behavior
+## Persistence Structure
 
-Guacamole enables **collaborative desktop sessions**:
+```
+/m2_home/                          # Volume mount (ALL variants)
+├── desktop-config/
+│   ├── xfce4/                     # Symlinked from ~/.config/xfce4
+│   ├── plank/                     # Symlinked from ~/.config/plank
+│   ├── autostart/                 # Symlinked from ~/.config/autostart
+│   └── Desktop/                   # Symlinked from ~/Desktop
+└── flatpak/                       # Symlinked from ~/.local/share/flatpak
+```
 
+## Multi-User Sessions (Guacamole Only)
+
+The Guacamole variant enables **collaborative desktop sessions**:
 - Multiple users can connect to the same desktop simultaneously
 - All input/output is shared between connected users
 - Actions by one user appear on all screens in real-time
 
-This is different from Selkies which only allows one user at a time. With Guacamole:
-- User A connects → sees desktop
-- User B connects → sees same desktop, can control it too
-- Both see each other's cursor movements and actions
+noVNC and Selkies are single-user only.
 
-## Coolify Deployment (guacamole branch)
+## Coolify Deployment
 
-**This section is specific to the `guacamole` branch deployment on Coolify.**
-
-### Network Architecture
-
-The deployment uses **Cloudflare Tunnel** for HTTPS access:
-
-```
-┌─────────────┐                         ┌─────────────────┐
-│   Browser   │──── WebSocket ─────────▶│ Cloudflare      │──▶ Coolify/Guacamole
-│   Client    │                         │ Tunnel          │    (port 8080)
-│             │                         │ g1.machinemachine.ai
-└─────────────┘                         └─────────────────┘
-```
-
-**Key Points:**
-- Cloudflare Tunnel proxies HTTP/WebSocket (simpler than Selkies)
-- No TURN/STUN servers needed (Guacamole uses WebSocket, not WebRTC)
-- Multi-user works through the same connection
-
-### Application Details
+**Application Details:**
 
 | Property | Value |
 |----------|-------|
 | Project | `machine.machine` |
 | Application UUID | `zw4sw440w8k80g0s8cw44kkc` |
-| Container Name Pattern | `clawdbot-desktop-worker-zw4sw440w8k80g0s8cw44kkc-*` |
-| Guacamole-Lite Port | 8080 (lightweight HTML5 client) |
-| Full Guacamole Port | 8888 (official Tomcat client) |
-| Gateway Port | 18789 (Clawdbot WebSocket) |
-| External URL (Lite) | `https://g1.machinemachine.ai` (via Cloudflare Tunnel) |
-| External URL (Full) | `https://g2.machinemachine.ai/guacamole` (via Cloudflare Tunnel) |
-| Coolify URL | `https://cool.machinemachine.ai/project/q8w4cwskgwkgg0cg00k00coo/environment/tkgkkwc0w0cso4ooc48848c4/application/zw4sw440w8k80g0s8cw44kkc` |
+| Container Name | `m2-desktop-worker-zw4sw440w8k80g0s8cw44kkc-*` |
+| Guacamole-Lite Port | 8080 |
+| Full Guacamole Port | 8888 |
+| M2 Gateway Port | 18789 |
+| External URL (Lite) | `https://g1.machinemachine.ai` |
+| External URL (Full) | `https://g2.machinemachine.ai/guacamole` |
 
-### Deployment Workflow
+**Deployment Workflow:**
 
-Pushing to the `guacamole` branch **automatically triggers** a rebuild and redeploy on Coolify (no manual action required in Coolify UI).
+Pushing to the main branch triggers automatic rebuild and redeploy on Coolify.
 
 ```bash
-# Make changes, commit, and push to trigger deployment
 git add <files>
 git commit -m "fix: Description of change"
-git push origin guacamole
-# Deployment starts automatically - wait ~2-3 minutes for build and deploy
+git push origin main
+# Deployment starts automatically
 ```
 
-### Debugging from Host (Coolify Server)
-
-The repo is checked out at `/home/hi/coolify-repos/clawdbot-desktop` on the Coolify host.
+**Debugging from Coolify Host:**
 
 ```bash
 # Find the running container
-docker ps --filter "name=clawdbot-desktop-worker"
+docker ps --filter "name=m2-desktop-worker"
 
-# View container logs (most recent)
-docker logs --tail 100 $(docker ps -q --filter "name=clawdbot-desktop-worker")
+# View logs
+docker logs --tail 100 $(docker ps -q --filter "name=m2-desktop-worker")
 
-# Follow logs in real-time
-docker logs -f $(docker ps -q --filter "name=clawdbot-desktop-worker")
+# Check supervisor status
+docker exec $(docker ps -q --filter "name=m2-desktop-worker") supervisorctl status
 
-# Check supervisor status inside container
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") supervisorctl status
-
-# View specific service logs inside container
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/guacamole.log
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/x11vnc.log
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/guacd.log
-docker exec $(docker ps -q --filter "name=clawdbot-desktop-worker") cat /var/log/xfce4.log
-
-# Get shell into container
-docker exec -it $(docker ps -q --filter "name=clawdbot-desktop-worker") bash
+# Get shell
+docker exec -it $(docker ps -q --filter "name=m2-desktop-worker") bash
 ```
 
-### Common Issues & Fixes
+## Common Issues & Fixes
 
 | Issue | Symptom | Fix |
 |-------|---------|-----|
-| x11vnc crash | `gave up: x11vnc entered FATAL state` | Check Xorg is running first, increase sleep time |
-| guacd not connecting | `Connection refused` on 4822 | Check guacd is running: `supervisorctl status guacd` |
-| Blank screen | Desktop loads but shows nothing | Check XFCE: `supervisorctl restart xfce4` |
-| Auth issues | Can't login with password | Check VNC_PASSWORD env var is set |
-| WebSocket error | Browser console WebSocket errors | Check Traefik WebSocket middleware labels |
+| x11vnc crash | `gave up: x11vnc entered FATAL state` | Check Xorg is running first |
+| guacd not connecting | `Connection refused` on 4822 | Check `supervisorctl status guacd` |
+| Blank screen | Desktop loads but shows nothing | `supervisorctl restart xfce4` |
+| Auth issues | Can't login | Check VNC_PASSWORD env var |
+| WebSocket error | Browser console errors | Check Traefik WebSocket config |
 
-### Port Mapping
-
-The docker-compose.yml uses Traefik labels for routing:
-- g1.machinemachine.ai → port **8080** (Guacamole-Lite HTML5)
-- g2.machinemachine.ai → port **8888** (Full Apache Guacamole)
-- Gateway domain → port **18789** (Clawdbot API)
-
-## Persistent Desktop Settings
-
-Desktop settings (XFCE, Plank dock, autostart apps) persist across container rebuilds.
-
-### How It Works
-
-On container startup, `entrypoint.sh` creates symlinks from the normal config locations to the persistent volume:
-
-```
-/home/developer/.config/xfce4/    → /clawdbot_home/desktop-config/xfce4/
-/home/developer/.config/plank/    → /clawdbot_home/desktop-config/plank/
-/home/developer/.config/autostart/ → /clawdbot_home/desktop-config/autostart/
-/home/developer/Desktop/          → /clawdbot_home/desktop-config/Desktop/
-```
-
-### Resetting to Defaults
+## Resetting Desktop Settings
 
 ```bash
-CONTAINER=$(docker ps -q --filter "name=clawdbot-desktop-worker")
+CONTAINER=$(docker ps -q --filter "name=m2-desktop-worker")
 
 # Reset all desktop settings
-docker exec $CONTAINER rm -rf /clawdbot_home/desktop-config
+docker exec $CONTAINER rm -rf /m2_home/desktop-config
 
 # Restart container to reinitialize
 docker restart $CONTAINER
@@ -246,80 +232,51 @@ WhiteSur theme is installed from git during build with fallbacks:
 - GTK Theme: WhiteSur-Dark (fallback: Arc)
 - Icons: WhiteSur (fallback: Papirus)
 - Cursors: McMojave (fallback: DMZ)
-- Wallpaper: Downloaded from WhiteSur-wallpapers repo
+- Wallpaper: WhiteSur-dark.png from WhiteSur-wallpapers repo
 
 ## Cargstore (App Store)
 
-Cargstore is an Electron-based app store for installing Flatpak applications. It's bundled into the container at `/opt/cargstore/`.
+Cargstore is an Electron-based app store for installing Flatpak applications. Located at `/opt/cargstore/`.
 
-### Persistent Storage
+## Variant-Specific Notes
 
-```
-/clawdbot_home/
-├── desktop-config/             (XFCE, Plank, autostart, desktop icons)
-│   ├── xfce4/                  (symlinked from ~/.config/xfce4/)
-│   ├── plank/                  (symlinked from ~/.config/plank/)
-│   ├── autostart/              (symlinked from ~/.config/autostart/)
-│   └── Desktop/                (symlinked from ~/Desktop/)
-└── flatpak/                    (symlinked from ~/.local/share/flatpak/)
-```
+### Guacamole (Default)
+- Multi-user capable
+- Uses x11vnc + guacd + guacamole-lite
+- Full Guacamole available on port 8888 for enterprise features
 
-## Full Apache Guacamole (Alternative)
+### noVNC
+- Uses TigerVNC on display :1 (not :0)
+- Simple setup, no guacd needed
+- Access at `/vnc.html`
 
-In addition to guacamole-lite, the docker-compose includes the **full Apache Guacamole** stack as an alternative. This provides the official Java/Tomcat web client with user management, connection history, and more features.
+### Selkies
+- Requires GPU for NVENC encoding (falls back to x264enc)
+- Single-user WebRTC
+- Needs TURN server for external access through firewalls
+- Lowest latency (~20ms vs ~50-100ms)
 
-### Architecture (Full Guacamole)
+## Full Apache Guacamole (Optional)
 
-```
-Browser → Guacamole Full (8888) → guacd (4822) → x11vnc (5900) → Xorg :0
-          (Java/Tomcat)          (in worker)    (in worker)
-```
+The docker-compose files include optional Full Guacamole services:
+- **guacamole-db**: MariaDB for user/connection storage
+- **guacamole-full**: Official Tomcat-based Guacamole
 
-### Services
+Access at port 8888 with default login `guacadmin/guacadmin`.
 
-| Service | Container | Port | Purpose |
-|---------|-----------|------|---------|
-| guacamole-db | MariaDB | 3306 (internal) | User/connection database |
-| guacamole-full | Tomcat | 8888 (external 8080 internal) | Official web UI |
+Features over guacamole-lite:
+- User management
+- Connection history
+- Session recording
+- Full SFTP support
 
-### Access
+## Comparison: All Variants
 
-- **Local**: http://localhost:8888/guacamole
-- **Production**: https://g2.machinemachine.ai/guacamole
-- **Default login**: guacadmin / guacadmin (change immediately!)
-
-### Pre-configured Connection
-
-The database init script creates a default VNC connection:
-- **Name**: Clawdbot Desktop
-- **Protocol**: VNC
-- **Host**: clawdbot-desktop-worker:5900
-- **Password**: clawdbot (from VNC_PASSWORD)
-
-### Guacamole-Lite vs Full Guacamole
-
-| Feature | Guacamole-Lite (8080) | Full Guacamole (8888) |
-|---------|----------------------|----------------------|
-| User management | None (token-based) | Full (DB-backed) |
-| Connection history | No | Yes |
-| Session recording | No | Yes |
-| File transfer | Limited | Full SFTP support |
-| Multi-user sharing | Yes | Yes (with sharing profiles) |
-| Memory footprint | ~50MB (Node.js) | ~500MB (Tomcat/Java) |
-| Startup time | Fast | Slower (JVM warmup) |
-
-Use **guacamole-lite** for simple, fast access. Use **full Guacamole** when you need user management, audit logs, or session recording.
-
-## Comparison: Guacamole vs Selkies
-
-| Feature | Guacamole (this branch) | Selkies (selkies branch) |
-|---------|-------------------------|--------------------------|
-| Multi-user | Yes - shared session | No - single user only |
-| Protocol | VNC over WebSocket | WebRTC |
-| Latency | ~50-100ms | ~20ms |
-| Video encoding | CPU (x11vnc) | GPU (NVENC) |
-| TURN servers | Not needed | Required for external users |
-| Complexity | Simpler | More complex |
-| Cloudflare compatible | Yes, easily | Yes, but needs TURN |
-
-Choose this branch for **multi-user collaboration**. Choose selkies branch for **lowest latency single-user**.
+| Feature | Guacamole | noVNC | Selkies |
+|---------|-----------|-------|---------|
+| Multi-user | Yes | No | No |
+| Protocol | VNC/WebSocket | VNC/WebSocket | WebRTC |
+| Latency | ~50-100ms | ~80-150ms | ~20ms |
+| Encoding | CPU | CPU | GPU (NVENC) |
+| TURN servers | Not needed | Not needed | Required |
+| Complexity | Moderate | Simple | Complex |

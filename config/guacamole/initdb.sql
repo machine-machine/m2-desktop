@@ -666,53 +666,53 @@ JOIN guacamole_entity affected ON permissions.affected_username = affected.name 
 JOIN guacamole_user            ON guacamole_user.entity_id = affected.entity_id;
 
 -- =============================================================================
--- Clawdbot Desktop: Default VNC connection to the desktop worker
+-- M2 Desktop: Default VNC connection to the desktop worker
 -- =============================================================================
 
 -- Create VNC connection to the desktop
 INSERT INTO guacamole_connection (connection_name, protocol)
-VALUES ('Clawdbot Desktop', 'vnc');
+VALUES ('M2 Desktop', 'vnc');
 
 -- Set connection parameters
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
-SELECT connection_id, 'hostname', 'clawdbot-desktop-worker'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+SELECT connection_id, 'hostname', 'm2-desktop-worker'
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'port', '5900'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 -- Note: Password will need to be set manually in Guacamole UI or update this value
--- Default password is 'clawdbot' (set via VNC_PASSWORD env var)
+-- Default password is 'm2desktop' (set via VNC_PASSWORD env var)
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
-SELECT connection_id, 'password', 'clawdbot'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+SELECT connection_id, 'password', 'm2desktop'
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 -- Enable clipboard and file transfer
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'enable-audio', 'true'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'enable-sftp', 'false'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 -- Display settings: auto-fit to browser window
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'resize-method', 'display-update'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'color-depth', '32'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'cursor', 'remote'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'autoretry', '3'
-FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 -- Grant guacadmin full access to the connection
 INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)

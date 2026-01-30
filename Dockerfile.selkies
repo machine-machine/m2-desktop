@@ -1,0 +1,109 @@
+# =============================================================================
+# M2 Desktop - Selkies Variant
+# Selkies-GStreamer WebRTC for low-latency remote desktop
+#
+# Architecture:
+#   Browser -> Selkies-GStreamer (8080) WebRTC -> Xorg :0
+# =============================================================================
+
+FROM ghcr.io/selkies-project/selkies-gstreamer/gstreamer:main-ubuntu22.04
+
+# Build args
+ARG DEBIAN_FRONTEND=noninteractive
+ARG CARGSTORE_VERSION=0.2.1
+
+# Environment
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    TZ=UTC \
+    USER=developer \
+    UID=1000 \
+    GID=1000 \
+    HOME=/home/developer \
+    DISPLAY=:0 \
+    XDG_RUNTIME_DIR=/tmp/runtime-developer \
+    # M2 paths
+    M2_HOME=/m2_home \
+    M2_VARIANT=selkies \
+    WORKSPACE=/workspace \
+    # Flatpak user installation
+    FLATPAK_USER_DIR=/m2_home/flatpak \
+    # Selkies settings
+    SELKIES_ENCODER=nvh264enc \
+    SELKIES_ENABLE_BASIC_AUTH=true \
+    # NVIDIA
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=all
+
+# =============================================================================
+# Shared Setup Scripts
+# =============================================================================
+COPY scripts/docker/*.sh /tmp/docker/
+RUN chmod +x /tmp/docker/*.sh
+
+# Install base packages (Selkies base may have some, but ensure all are present)
+RUN /tmp/docker/base-packages.sh
+
+# =============================================================================
+# Create User
+# =============================================================================
+RUN /tmp/docker/setup-user.sh
+
+# =============================================================================
+# Install Flatpak + Chrome + Cargstore
+# =============================================================================
+ENV CARGSTORE_VERSION=${CARGSTORE_VERSION}
+RUN /tmp/docker/setup-flatpak.sh
+
+# =============================================================================
+# Install Node.js + M2 Gateway
+# =============================================================================
+RUN /tmp/docker/setup-node.sh
+
+# =============================================================================
+# Install WhiteSur Theme
+# =============================================================================
+RUN /tmp/docker/setup-desktop.sh
+
+# =============================================================================
+# Create Directories
+# =============================================================================
+RUN mkdir -p ${M2_HOME} ${WORKSPACE} ${XDG_RUNTIME_DIR} && \
+    chown -R ${USER}:${USER} ${M2_HOME} ${WORKSPACE} ${XDG_RUNTIME_DIR}
+
+# =============================================================================
+# Copy Configuration Files
+# =============================================================================
+COPY --chown=${USER}:${USER} config/xfce4/ /home/${USER}/.config/xfce4/
+COPY --chown=${USER}:${USER} config/plank/ /home/${USER}/.config/plank/
+COPY --chown=${USER}:${USER} config/desktop/ /home/${USER}/Desktop/
+COPY --chown=${USER}:${USER} config/autostart/ /home/${USER}/.config/autostart/
+COPY config/xorg.conf /etc/X11/xorg.conf
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY scripts/supervisord/selkies.conf /etc/supervisor/conf.d/supervisord.conf
+COPY scripts/start-desktop.sh /usr/local/bin/start-desktop.sh
+
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start-desktop.sh && \
+    chown -R ${USER}:${USER} /home/${USER}
+
+# Cleanup
+RUN rm -rf /tmp/docker
+
+# =============================================================================
+# Volumes & Ports
+# =============================================================================
+VOLUME ["${M2_HOME}", "${WORKSPACE}"]
+
+# Selkies WebRTC (8080) + M2 Gateway (18789)
+EXPOSE 8080 18789
+
+# =============================================================================
+# Healthcheck
+# =============================================================================
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -s http://localhost:8080/ | grep -q "selkies" || exit 1
+
+# =============================================================================
+# Entrypoint
+# =============================================================================
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
