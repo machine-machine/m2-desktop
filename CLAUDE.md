@@ -159,16 +159,14 @@ The deployment uses **Cloudflare Tunnel** for HTTPS access:
 
 ### Deployment Workflow
 
-Commits pushed to the `guacamole` branch trigger a rebuild and redeploy on Coolify.
+Pushing to the `guacamole` branch **automatically triggers** a rebuild and redeploy on Coolify (no manual action required in Coolify UI).
 
 ```bash
 # Make changes, commit, and push to trigger deployment
 git add <files>
 git commit -m "fix: Description of change"
 git push origin guacamole
-
-# Wait ~2-3 minutes for build and deploy
-# Then check logs to verify
+# Deployment starts automatically - wait ~2-3 minutes for build and deploy
 ```
 
 ### Debugging from Host (Coolify Server)
