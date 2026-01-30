@@ -697,6 +697,19 @@ INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, param
 SELECT connection_id, 'enable-sftp', 'false'
 FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
 
+-- Set display resolution
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'width', '1920'
+FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'height', '1080'
+FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'color-depth', '24'
+FROM guacamole_connection WHERE connection_name = 'Clawdbot Desktop';
+
 -- Grant guacadmin full access to the connection
 INSERT INTO guacamole_connection_permission (entity_id, connection_id, permission)
 SELECT e.entity_id, c.connection_id, permission
