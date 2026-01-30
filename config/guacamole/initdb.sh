@@ -1,3 +1,15 @@
+#!/bin/bash
+# =============================================================================
+# M2 Desktop - Guacamole Database Initialization
+# This script runs during MariaDB first-time initialization
+# =============================================================================
+
+# Use VNC_PASSWORD from environment, default to m2desktop
+VNC_PASSWORD="${VNC_PASSWORD:-m2desktop}"
+
+echo "Initializing Guacamole database with VNC_PASSWORD from environment..."
+
+mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" <<'SCHEMA_EOF'
 --
 -- Licensed to the Apache Software Foundation (ASF) under one
 -- or more contributor license agreements.  See the NOTICE file
@@ -55,7 +67,7 @@ CREATE TABLE `guacamole_connection` (
   `connection_name`     varchar(128) NOT NULL,
   `parent_id`           int(11),
   `protocol`            varchar(32)  NOT NULL,
-  
+
   -- Guacamole proxy (guacd) overrides
   `proxy_port`              integer,
   `proxy_hostname`          varchar(512),
@@ -64,7 +76,7 @@ CREATE TABLE `guacamole_connection` (
   -- Concurrency limits
   `max_connections`          int(11),
   `max_connections_per_user` int(11),
-  
+
   -- Load-balancing behavior
   `connection_weight`        int(11),
   `failover_only`            boolean NOT NULL DEFAULT 0,
@@ -611,24 +623,6 @@ CREATE TABLE guacamole_user_password_history (
     REFERENCES `guacamole_user` (`user_id`) ON DELETE CASCADE
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
---
--- Licensed to the Apache Software Foundation (ASF) under one
--- or more contributor license agreements.  See the NOTICE file
--- distributed with this work for additional information
--- regarding copyright ownership.  The ASF licenses this file
--- to you under the Apache License, Version 2.0 (the
--- "License"); you may not use this file except in compliance
--- with the License.  You may obtain a copy of the License at
---
---   http://www.apache.org/licenses/LICENSE-2.0
---
--- Unless required by applicable law or agreed to in writing,
--- software distributed under the License is distributed on an
--- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
--- KIND, either express or implied.  See the License for the
--- specific language governing permissions and limitations
--- under the License.
---
 
 -- Create default user "guacadmin" with password "guacadmin"
 INSERT INTO guacamole_entity (name, type) VALUES ('guacadmin', 'USER');
@@ -673,19 +667,13 @@ JOIN guacamole_user            ON guacamole_user.entity_id = affected.entity_id;
 INSERT INTO guacamole_connection (connection_name, protocol)
 VALUES ('M2 Desktop', 'vnc');
 
--- Set connection parameters
+-- Set connection parameters (except password - added separately with env var)
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'hostname', 'm2-desktop-worker'
 FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, 'port', '5900'
-FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
-
--- Note: Password will need to be set manually in Guacamole UI or update this value
--- Default password is 'm2desktop' (set via VNC_PASSWORD env var)
-INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
-SELECT connection_id, 'password', 'm2desktop'
 FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
 
 -- Enable clipboard and file transfer
@@ -726,4 +714,15 @@ FROM (
 CROSS JOIN guacamole_entity e
 CROSS JOIN guacamole_connection c
 WHERE e.name = 'guacadmin' AND e.type = 'USER'
-  AND c.connection_name = 'Clawdbot Desktop';
+  AND c.connection_name = 'M2 Desktop';
+SCHEMA_EOF
+
+# Now insert the VNC password using shell variable substitution
+# This is the key part - the password comes from the environment
+mysql -u root -p"${MYSQL_ROOT_PASSWORD}" "${MYSQL_DATABASE}" <<EOF
+INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
+SELECT connection_id, 'password', '${VNC_PASSWORD}'
+FROM guacamole_connection WHERE connection_name = 'M2 Desktop';
+EOF
+
+echo "Guacamole database initialized with VNC password from environment."

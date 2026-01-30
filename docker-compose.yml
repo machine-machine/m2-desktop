@@ -41,7 +41,7 @@ services:
               capabilities: ["gpu", "compute", "utility", "video"]
 
     # Required for Chrome shared memory
-    shm_size: '2gb'
+    shm_size: ${SHM_SIZE:-2gb}
 
     # Required for Flatpak apps (bubblewrap needs user namespaces)
     privileged: true
@@ -80,9 +80,10 @@ services:
       MYSQL_DATABASE: guacamole_db
       MYSQL_USER: guacamole_user
       MYSQL_PASSWORD: ${GUAC_DB_PASSWORD:-guacamole_pass}
+      VNC_PASSWORD: ${VNC_PASSWORD:-m2desktop}
     volumes:
       - guacamole_db:/var/lib/mysql
-      - ./config/guacamole/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+      - ./config/guacamole/initdb.sh:/docker-entrypoint-initdb.d/initdb.sh:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s

@@ -35,7 +35,7 @@ services:
               count: all
               capabilities: ["gpu", "compute", "utility", "video"]
 
-    shm_size: '2gb'
+    shm_size: ${SHM_SIZE:-2gb}
     privileged: true
 
     # ports:  # Uncomment for standalone use (Coolify uses Traefik labels)
