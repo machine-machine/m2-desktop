@@ -90,12 +90,12 @@ app.get('/api/token', (req, res) => {
                 hostname: VNC_HOST,
                 port: VNC_PORT,
                 password: VNC_PASSWORD,
-                'enable-audio': true,
-                'audio-servername': process.env.PULSE_SERVER || '',
+                'enable-audio': false,
                 'resize-method': 'display-update',
-                'color-depth': 24,
-                'cursor': 'remote',
+                'color-depth': 16,
+                'cursor': 'local',
                 'clipboard-encoding': 'UTF-8',
+                'swap-red-blue': false,
             }
         }
     };
@@ -285,8 +285,8 @@ app.get('/', (req, res) => {
                     showError(error.message || 'Connection error');
                 };
 
-                // Connect
-                guac.connect();
+                // Connect (pass empty string to avoid ?undefined being appended)
+                guac.connect('');
 
                 // Handle mouse
                 const mouse = new Guacamole.Mouse(displayEl);
