@@ -214,6 +214,7 @@ app.get('/', (req, res) => {
 
     <script src="/static/guacamole.min.js"></script>
     <script>
+        console.log('[Guacamole] Script loaded');
         let guac;
         let connected = false;
 
@@ -232,13 +233,16 @@ app.get('/', (req, res) => {
         }
 
         async function connect() {
+            console.log('[Guacamole] connect() called');
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
             document.getElementById('display').innerHTML = '';
 
             try {
                 // Get connection token (include credentials for basic auth)
+                console.log('[Guacamole] Fetching token...');
                 const tokenRes = await fetch('/api/token', { credentials: 'include' });
+                console.log('[Guacamole] Token response:', tokenRes.status);
                 if (!tokenRes.ok) {
                     throw new Error('Failed to get token: ' + tokenRes.status);
                 }
@@ -247,9 +251,12 @@ app.get('/', (req, res) => {
                 // Build WebSocket URL
                 const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = wsProtocol + '//' + location.host + '/websocket?token=' + encodeURIComponent(token);
+                console.log('[Guacamole] WebSocket URL:', wsUrl);
 
                 // Create Guacamole client
+                console.log('[Guacamole] Creating WebSocketTunnel...');
                 const tunnel = new Guacamole.WebSocketTunnel(wsUrl);
+                console.log('[Guacamole] Creating Client...');
                 guac = new Guacamole.Client(tunnel);
 
                 // Add display to container
@@ -337,6 +344,7 @@ app.get('/', (req, res) => {
         }
 
         // Initial connection
+        console.log('[Guacamole] Starting initial connection...');
         connect();
     </script>
 </body>
