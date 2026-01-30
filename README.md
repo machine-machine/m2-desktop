@@ -2,14 +2,14 @@
 
 A containerized Linux desktop accessible from any browser. Three remote desktop technologies to choose from based on your needs.
 
-## Quick Start
+## Quick Start (Local Development)
 
 ```bash
 # Start the desktop (Guacamole - default)
-docker compose up -d
+docker compose -f docker-compose.local.yml up -d
 
 # Open in browser
-open http://localhost:8080
+open http://localhost:28080
 
 # Login: developer / m2desktop
 ```
@@ -22,18 +22,29 @@ open http://localhost:8080
 | **Multi-user** | - | Yes | - |
 | **Latency** | ~100ms | ~70ms | ~20ms |
 | **Encoding** | CPU | CPU | GPU |
-| **Port** | 6080 | 8080 | 8080 |
 
 ```bash
+# Guacamole - Multi-user sessions (default)
+docker compose -f docker-compose.local.yml up -d
+
 # noVNC - Simple VNC-to-web proxy
 docker compose -f docker-compose.novnc.yml up -d
-
-# Guacamole - Multi-user sessions (default)
-docker compose up -d
 
 # Selkies - Low-latency WebRTC (requires GPU)
 docker compose -f docker-compose.selkies.yml up -d
 ```
+
+## Ports
+
+| Port | Service | Env Var |
+|------|---------|---------|
+| 28080 | Guacamole-Lite | `GUAC_LITE_PORT` |
+| 26080 | noVNC | `NOVNC_PORT` |
+| 28080 | Selkies WebRTC | `SELKIES_PORT` |
+| 28888 | Full Guacamole | `GUAC_FULL_PORT` |
+| 18789 | M2 Gateway | `M2_GATEWAY_PORT` |
+
+> **Coolify/Production:** Ports are not exposed. Traefik handles routing via labels.
 
 ## What's Included
 
@@ -62,8 +73,6 @@ docker compose -f docker-compose.selkies.yml up -d
 │  │  • noVNC: TigerVNC → websockify     │    │
 │  │  • Selkies: GStreamer → WebRTC      │    │
 │  └─────────────────────────────────────┘    │
-│                                              │
-│  Ports: 8080 (web) | 18789 (M2 Gateway)     │
 └──────────────────────────────────────────────┘
 ```
 
@@ -127,13 +136,13 @@ docker compose exec m2-desktop-worker tail -f /var/log/guacamole.log
 
 ## Full Apache Guacamole
 
-The default compose includes optional enterprise Guacamole (port 8888):
+The default compose includes optional enterprise Guacamole:
 
 - User management and authentication
 - Connection history and audit logs
 - Session recording
 
-Access at `http://localhost:8888` with login `guacadmin / guacadmin`
+Access at `http://localhost:28888` with login `guacadmin / guacadmin`
 
 ## Building
 
