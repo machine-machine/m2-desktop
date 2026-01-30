@@ -6,6 +6,7 @@ Multi-user HTML5 remote desktop for Clawdbot, using Apache Guacamole for shared 
 
 - **Multi-User Sessions** - Multiple users can view and control the same desktop simultaneously
 - **HTML5 Client** - No plugins, works in any modern browser
+- **Two Guacamole Options** - Lightweight (guacamole-lite) or Full (Apache Guacamole with user management)
 - **Pretty XFCE Desktop** - WhiteSur macOS-style theme + Plank dock
 - **Clawdbot Gateway** - Installed and running as a daemon
 - **Audio Support** - PulseAudio streaming included
@@ -39,8 +40,16 @@ Multi-user HTML5 remote desktop for Clawdbot, using Apache Guacamole for shared 
 
 ### Data Flow
 
+**Guacamole-Lite (lightweight, port 8080):**
 ```
 Browser → Guacamole-Lite (8080) → guacd (4822) → x11vnc (5900) → Xorg :0
+```
+
+**Full Apache Guacamole (with user management, port 8888):**
+```
+Browser → Guacamole Full (8888) → guacd (4822) → x11vnc (5900) → Xorg :0
+              ↓
+         MariaDB (user/connection storage)
 ```
 
 ## Quick Start
@@ -51,9 +60,12 @@ Browser → Guacamole-Lite (8080) → guacd (4822) → x11vnc (5900) → Xorg :0
 docker compose up -d
 ```
 
-Access: `https://desktop.yourdomain.com`
-- Username: `developer`
-- Password: value of `VNC_PASSWORD` (default: `clawdbot`)
+**Access Options:**
+
+| Client | URL | Credentials |
+|--------|-----|-------------|
+| Guacamole-Lite | `https://g1.yourdomain.com` | `developer` / `VNC_PASSWORD` |
+| Full Guacamole | `https://g2.yourdomain.com/guacamole` | `guacadmin` / `guacadmin` |
 
 ### Local Development (without GPU)
 
@@ -61,7 +73,14 @@ Access: `https://desktop.yourdomain.com`
 docker compose -f docker-compose.local.yml up -d
 ```
 
-Access: `http://localhost:8080`
+**Access Options:**
+
+| Client | URL | Credentials |
+|--------|-----|-------------|
+| Guacamole-Lite | `http://localhost:8080` | `developer` / `clawdbot` |
+| Full Guacamole | `http://localhost:8888/guacamole` | `guacadmin` / `guacadmin` |
+
+> **Important:** Change the default `guacadmin` password immediately after first login!
 
 ## Multi-User Sessions
 
@@ -82,15 +101,34 @@ This is ideal for:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VNC_PASSWORD` | `clawdbot` | Password for both VNC and web authentication |
+| `VNC_PASSWORD` | `clawdbot` | Password for VNC and guacamole-lite web auth |
 | `ANTHROPIC_API_KEY` | - | For Clawdbot |
 | `OPENAI_API_KEY` | - | For Clawdbot (optional) |
+| `GUAC_DB_ROOT_PASSWORD` | `guacamole_root_pass` | MariaDB root password (Full Guacamole) |
+| `GUAC_DB_PASSWORD` | `guacamole_pass` | MariaDB user password (Full Guacamole) |
+
+> **Note:** The Full Guacamole admin user (`guacadmin/guacadmin`) is created in the database init script. Change it via the web UI after first login.
 
 ## Coolify Configuration
 
 After deploying, configure domains in Coolify UI:
-- Desktop: your domain → port **8080**
-- Gateway: your domain → port **18789**
+- Guacamole-Lite: `g1.yourdomain.com` → port **8080**
+- Full Guacamole: `g2.yourdomain.com` → port **8888**
+- Gateway: `gateway.yourdomain.com` → port **18789**
+
+## Guacamole-Lite vs Full Guacamole
+
+| Feature | Guacamole-Lite (8080) | Full Guacamole (8888) |
+|---------|----------------------|----------------------|
+| User management | None (token-based) | Full (DB-backed) |
+| Connection history | No | Yes |
+| Session recording | No | Yes |
+| File transfer | Limited | Full SFTP support |
+| Multi-user sharing | Yes | Yes (with sharing profiles) |
+| Memory footprint | ~50MB (Node.js) | ~500MB (Tomcat/Java) |
+| Startup time | Fast | Slower (JVM warmup) |
+
+Use **guacamole-lite** for simple, fast access. Use **full Guacamole** when you need user management, audit logs, or session recording.
 
 ## GPU Requirements
 
@@ -129,7 +167,7 @@ The container uses `supervisor` to manage all internal processes:
 
 ### Persistent Desktop Settings
 
-Desktop settings (XFCE panels, Plank dock, autostart apps) persist across container restarts and rebuilds. They're stored in `/clawdbot_home/desktop-config/`.
+Desktop settings (XFCE panels, Plank dock, autostart apps, desktop icons) persist across container restarts and rebuilds. They're stored in `/clawdbot_home/desktop-config/`.
 
 **Reset to Defaults:**
 
@@ -140,9 +178,10 @@ If you want to reset your desktop customizations back to the original defaults:
 docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config
 
 # Or reset only specific configs
-docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config/xfce4   # XFCE panels/theme
-docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config/plank   # Dock settings
-docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config/autostart  # Startup apps
+docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config/xfce4     # XFCE panels/theme
+docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config/plank     # Dock settings
+docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config/autostart # Startup apps
+docker compose exec clawdbot-desktop-worker rm -rf /clawdbot_home/desktop-config/Desktop   # Desktop icons
 
 # Restart to apply defaults
 docker compose restart
