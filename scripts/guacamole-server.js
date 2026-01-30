@@ -137,6 +137,9 @@ app.get('/', (req, res) => {
             height: 100%;
             cursor: none;
         }
+        #display canvas {
+            z-index: 1 !important;
+        }
         #loading {
             position: absolute;
             top: 50%;
@@ -265,7 +268,9 @@ app.get('/', (req, res) => {
                 document.getElementById('display').appendChild(displayEl);
 
                 // Handle state changes
+                console.log('[Guacamole] Setting up state handler...');
                 guac.onstatechange = function(state) {
+                    console.log('[Guacamole] State changed:', state);
                     switch(state) {
                         case 0: showStatus('Idle'); break;
                         case 1: showStatus('Connecting...'); break;
@@ -287,13 +292,16 @@ app.get('/', (req, res) => {
                 };
 
                 // Handle errors
+                console.log('[Guacamole] Setting up error handler...');
                 guac.onerror = function(error) {
-                    console.error('Guacamole error:', error);
+                    console.error('[Guacamole] Error:', error);
                     showError(error.message || 'Connection error');
                 };
 
                 // Connect (pass empty string to avoid ?undefined being appended)
+                console.log('[Guacamole] Calling guac.connect()...');
                 guac.connect('');
+                console.log('[Guacamole] connect() called, waiting for state changes...');
 
                 // Handle mouse
                 const mouse = new Guacamole.Mouse(displayEl);
