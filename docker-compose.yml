@@ -57,6 +57,11 @@ services:
       retries: 3
       start_period: 60s
 
+    # Connect to coolify network for access to other services
+    networks:
+      - default
+      - coolify
+
     # Note: Traefik labels are managed by Coolify - do not hardcode here
 
   # =============================================================================
@@ -130,3 +135,9 @@ volumes:
   m2_home:
   m2_workspace:
   guacamole_db:
+
+# External network for communication with other Coolify services
+# (e.g., agent.memory.system, ollama, etc.)
+networks:
+  coolify:
+    external: true
