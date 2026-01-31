@@ -42,7 +42,7 @@ docker compose -f docker-compose.selkies.yml up -d
 | 26080 | noVNC | `NOVNC_PORT` |
 | 28080 | Selkies WebRTC | `SELKIES_PORT` |
 | 28888 | Full Guacamole | `GUAC_FULL_PORT` |
-| 18789 | M2 Gateway | `M2_GATEWAY_PORT` |
+| 18789 | OpenClaw Gateway | `M2_GATEWAY_PORT` |
 
 > **Coolify/Production:** Ports are not exposed. Traefik handles routing via labels.
 
@@ -52,7 +52,7 @@ docker compose -f docker-compose.selkies.yml up -d
 - **Plank dock** for quick app launching
 - **Google Chrome** pre-installed
 - **Cargstore** app store for Flatpak apps
-- **M2 Gateway** AI agent interface (port 18789)
+- **OpenClaw Gateway** AI agent interface (port 18789)
 - **Persistent storage** - settings survive container restarts
 
 ## Architecture
@@ -83,7 +83,7 @@ docker compose -f docker-compose.selkies.yml up -d
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VNC_PASSWORD` | `m2desktop` | Web login password |
-| `ANTHROPIC_API_KEY` | - | For M2 Gateway AI features |
+| `ANTHROPIC_API_KEY` | - | For OpenClaw Gateway AI features |
 
 ### Persistent Storage
 

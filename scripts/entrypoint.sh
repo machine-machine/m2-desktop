@@ -88,6 +88,14 @@ if [ ! -d "${FLATPAK_USER_DIR}/repo" ]; then
 fi
 
 # =============================================================================
+# Persistent OpenClaw Directory
+# =============================================================================
+export OPENCLAW_HOME="${M2_HOME}/openclaw"
+mkdir -p "${OPENCLAW_HOME}"
+chown -R developer:developer "${OPENCLAW_HOME}"
+echo "OpenClaw config persistent at ${OPENCLAW_HOME}"
+
+# =============================================================================
 # Register Cargstore as flatpak: URI handler
 # =============================================================================
 mkdir -p /home/developer/.config
@@ -120,7 +128,7 @@ case "${M2_VARIANT}" in
         echo ""
         echo "Access:"
         echo "  noVNC: http://localhost:6080/vnc.html"
-        echo "  M2 Gateway: ws://localhost:18789"
+        echo "  OpenClaw Gateway: ws://localhost:18789"
         echo ""
         ;;
 
@@ -148,7 +156,7 @@ case "${M2_VARIANT}" in
         echo ""
         echo "Access:"
         echo "  Web: http://localhost:8080"
-        echo "  M2 Gateway: ws://localhost:18789"
+        echo "  OpenClaw Gateway: ws://localhost:18789"
         echo ""
         echo "Multi-user: enabled (all users share same session)"
         echo ""
@@ -180,7 +188,7 @@ case "${M2_VARIANT}" in
         echo ""
         echo "Access:"
         echo "  Web: http://localhost:8080"
-        echo "  M2 Gateway: ws://localhost:18789"
+        echo "  OpenClaw Gateway: ws://localhost:18789"
         echo ""
         echo "NOTE: Single-user only (WebRTC is 1:1)"
         echo ""

@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
-# M2 Desktop - Node.js + M2 Gateway Installation
-# Installs Node.js 22.x and the M2 Gateway CLI tool
+# M2 Desktop - Node.js + OpenClaw Installation
+# Installs Node.js 22.x and the OpenClaw Gateway CLI tool
 # =============================================================================
 set -e
 
@@ -18,9 +18,12 @@ rm -rf /var/lib/apt/lists/*
 node --version
 npm --version
 
-# Install M2 Gateway (formerly clawdbot)
-# Note: The npm package is still 'clawdbot' until renamed
-echo "=== Installing M2 Gateway ==="
-npm install -g clawdbot@latest
+# Install OpenClaw Gateway
+echo "=== Installing OpenClaw Gateway ==="
+npm install -g openclaw@latest
 
-echo "=== Node.js and M2 Gateway installed ==="
+# Create OpenClaw home directory for persistence
+mkdir -p /m2_home/openclaw
+chown -R developer:developer /m2_home/openclaw 2>/dev/null || true
+
+echo "=== Node.js and OpenClaw Gateway installed ==="
