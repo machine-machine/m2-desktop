@@ -20,7 +20,7 @@ apt-get update && apt-get install -y --no-install-recommends \
     arc-theme papirus-icon-theme dmz-cursor-theme \
     fonts-inter fonts-noto fonts-noto-color-emoji fonts-dejavu-core \
     fonts-liberation libnss3 libxss1 libasound2 libatk-bridge2.0-0 libgtk-3-0 \
-    supervisor dbus dbus-x11 pulseaudio
+    supervisor dbus dbus-x11 pulseaudio netcat-openbsd
 
 # Generate locale
 locale-gen en_US.UTF-8

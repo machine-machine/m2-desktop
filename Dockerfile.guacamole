@@ -3,7 +3,7 @@
 # Multi-user HTML5 remote desktop via Apache Guacamole protocol
 #
 # Architecture:
-#   Browser -> Guacamole-Lite (8080) -> guacd (4822) -> x11vnc (5900) -> Xorg :0
+#   Browser -> Full Guacamole (separate container) -> guacd (4822) -> x11vnc (5900) -> Xorg :0
 # =============================================================================
 
 FROM ubuntu:22.04
@@ -85,12 +85,6 @@ RUN /tmp/docker/setup-flatpak.sh
 # =============================================================================
 RUN /tmp/docker/setup-node.sh
 
-# Install guacamole-lite (lightweight HTML5 client)
-RUN mkdir -p /opt/guacamole-lite && \
-    cd /opt/guacamole-lite && \
-    npm init -y && \
-    npm install guacamole-lite express
-
 # =============================================================================
 # Install WhiteSur Theme
 # =============================================================================
@@ -113,8 +107,6 @@ COPY config/xorg.conf /etc/X11/xorg.conf
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/supervisord/guacamole.conf /etc/supervisor/conf.d/supervisord.conf
 COPY scripts/start-desktop.sh /usr/local/bin/start-desktop.sh
-COPY scripts/guacamole-server.js /opt/guacamole-lite/server.js
-COPY scripts/static/ /opt/guacamole-lite/static/
 
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/start-desktop.sh && \
     chown -R ${USER}:${USER} /home/${USER}
@@ -127,14 +119,14 @@ RUN rm -rf /tmp/docker
 # =============================================================================
 VOLUME ["${M2_HOME}", "${WORKSPACE}"]
 
-# Guacamole Web (8080) + M2 Gateway (18789)
-EXPOSE 8080 18789
+# guacd (4822) + M2 Gateway (18789)
+EXPOSE 4822 18789
 
 # =============================================================================
-# Healthcheck
+# Healthcheck (check if guacd is listening)
 # =============================================================================
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ | grep -qE '^(200|401)$' || exit 1
+    CMD nc -z localhost 4822 || exit 1
 
 # =============================================================================
 # Entrypoint

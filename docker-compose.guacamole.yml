@@ -50,7 +50,7 @@ services:
       - m2_workspace:/workspace
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health | grep -q '200'"]
+      test: ["CMD-SHELL", "nc -z localhost 4822"]
       interval: 30s
       timeout: 10s
       retries: 3

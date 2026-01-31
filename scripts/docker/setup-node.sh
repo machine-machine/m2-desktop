@@ -18,18 +18,6 @@ rm -rf /var/lib/apt/lists/*
 node --version
 npm --version
 
-# Install Claude Code CLI
-echo "=== Installing Claude Code ==="
-curl -fsSL https://claude.ai/install.sh | sh
-# Ensure claude is in PATH for all users
-if [ -f /root/.claude/local/bin/claude ]; then
-    ln -sf /root/.claude/local/bin/claude /usr/local/bin/claude
-elif [ -f /root/.local/bin/claude ]; then
-    ln -sf /root/.local/bin/claude /usr/local/bin/claude
-fi
-# Verify installation
-which claude && claude --version || echo "Warning: Claude Code installation may have failed"
-
 # Install OpenClaw Gateway
 echo "=== Installing OpenClaw Gateway ==="
 npm install -g openclaw@latest

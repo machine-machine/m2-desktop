@@ -28,7 +28,7 @@ services:
     shm_size: ${SHM_SIZE:-2gb}
 
     ports:
-      - "${GUAC_LITE_PORT:-28080}:8080"   # Guacamole-Lite HTML5
+      - "${GUACD_PORT:-4822}:4822"        # guacd for Full Guacamole
       - "${M2_GATEWAY_PORT:-18789}:18789" # M2 Gateway
 
     volumes:
@@ -36,7 +36,7 @@ services:
       - m2_workspace_local:/workspace
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health | grep -q '200'"]
+      test: ["CMD-SHELL", "nc -z localhost 4822"]
       interval: 30s
       timeout: 10s
       retries: 3
