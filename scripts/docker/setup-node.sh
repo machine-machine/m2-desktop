@@ -26,6 +26,17 @@ npm install -g openclaw@latest
 echo "=== Installing Claude Code CLI ==="
 npm install -g @anthropic-ai/claude-code
 
+# Configure npm to use user-local directory for global packages (avoids permission issues)
+echo "=== Configuring npm for user installs ==="
+mkdir -p /home/developer/.npm-global
+chown -R developer:developer /home/developer/.npm-global
+su - developer -c 'npm config set prefix /home/developer/.npm-global'
+
+# Add npm-global to PATH in bashrc
+echo '' >> /home/developer/.bashrc
+echo '# npm global packages' >> /home/developer/.bashrc
+echo 'export PATH="/home/developer/.npm-global/bin:$PATH"' >> /home/developer/.bashrc
+
 # Create OpenClaw home directory for persistence
 mkdir -p /m2_home/openclaw
 chown -R developer:developer /m2_home/openclaw 2>/dev/null || true
