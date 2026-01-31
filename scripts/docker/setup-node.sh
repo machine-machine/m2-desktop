@@ -22,6 +22,10 @@ npm --version
 echo "=== Installing OpenClaw Gateway ==="
 npm install -g openclaw@latest
 
+# Install Claude Code CLI
+echo "=== Installing Claude Code CLI ==="
+npm install -g @anthropic-ai/claude-code
+
 # Create OpenClaw home directory for persistence
 mkdir -p /m2_home/openclaw
 chown -R developer:developer /m2_home/openclaw 2>/dev/null || true
