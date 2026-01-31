@@ -57,18 +57,10 @@ services:
       retries: 3
       start_period: 60s
 
-    labels:
-      - traefik.enable=true
-      # Route to Guacamole-Lite on port 8080
-      - traefik.http.services.m2-desktop-worker.loadbalancer.server.port=8080
-      # HTTP router (Cloudflare handles HTTPS)
-      - traefik.http.routers.m2-desktop.rule=Host(`g1.machinemachine.ai`)
-      - traefik.http.routers.m2-desktop.entrypoints=http
-      - traefik.http.routers.m2-desktop.service=m2-desktop-worker
+    # Note: Traefik labels are managed by Coolify - do not hardcode here
 
   # =============================================================================
   # Full Apache Guacamole Stack (optional - for enterprise features)
-  # Access via g2.machinemachine.ai or localhost:8888
   # =============================================================================
 
   guacamole-db:
@@ -113,6 +105,9 @@ services:
       # Serve at / instead of /guacamole
       WEBAPP_CONTEXT: ROOT
 
+      # Enable reverse proxy support (for X-Forwarded-* headers)
+      REMOTE_IP_VALVE_ENABLED: "true"
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
@@ -120,14 +115,7 @@ services:
       retries: 5
       start_period: 60s
 
-    labels:
-      - traefik.enable=true
-      # Route to Guacamole Full on port 8888 (internally 8080)
-      - traefik.http.services.guacamole-full.loadbalancer.server.port=8080
-      # HTTP router for full Guacamole
-      - traefik.http.routers.guacamole-full.rule=Host(`g2.machinemachine.ai`)
-      - traefik.http.routers.guacamole-full.entrypoints=http
-      - traefik.http.routers.guacamole-full.service=guacamole-full
+    # Note: Traefik labels are managed by Coolify - do not hardcode here
 
 volumes:
   m2_home:
